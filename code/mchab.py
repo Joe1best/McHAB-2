@@ -10,6 +10,7 @@ import RPi.GPIO as GPIO
 import L3G4200D as L3G
 import LSM303DLM as LSM
 import BMP085 as BMP
+import GPS
 
 class IMU_Params:
     accel = []
@@ -37,9 +38,9 @@ def readIMU(arg):
 
 def readBMP(arg):
     print 'BMP read: ' + str(datetime.datetime.now())
-    arg[0].temp = arg[0].readTemperature()
-    arg[0].pressure = arg[0].readPressure()
-    arg[0].altitude = arg[0].readAltitude()
+    arg[0].temp = arg[0].bmp.readTemperature()
+    arg[0].pressure = arg[0].bmp.readPressure()
+    arg[0].altitude = arg[0].bmp.readAltitude()
     print 'temp: ' + str(arg[0].temp) + ';pressure: ' + str(arg[0].pressure) + ';altitude: ' + str(arg[0].altitude)
 
 def readGPS(arg):
