@@ -14,6 +14,7 @@ import BMP085 as BMP
 
 beeper_pin = 18
 fuser_pin = 21
+mission_time = 120 * 60 * 1000.0 #120 mins. --> millisec
 
 class PersistantVars:
     accel = []
@@ -105,15 +106,15 @@ def beeper(arg):
             arg[0].beep_high = False
             if(arg[0].beep_count > 4):
                 arg[0].beep_gps = True
-                
+
 def fuser(arg):
     if(arg[0].boundary_reached and not arg[0].fuser_fired):
         GPIO.output(pin_pin,GPIO.HIGH)
         print 'Fired fuser'
-        fuser_count = fuser_count + 1
-    if(fuser_count > 60):
+        arg[0].fuser_count = fuser_count + 1
+    if(arg[0].fuser_count > 60):
         GPIO.output(pin_pin,GPIO.LOW)
-        fuser_fired = True
+        arg[0].fuser_fired = True
 
 if __name__ == '__main__':
     #Create log files
@@ -145,11 +146,11 @@ if __name__ == '__main__':
     #Object container initializations
     persistent = PersistantVars(lsm, l3g, BMP.BMP085())
 
-    #imu_task = task.LoopingCall(readIMU,[persistent]).start(1.0/imu_fs)
-    #bmp_task = task.LoopingCall(readBMP,[persistent]).start(1.0/bmp_fs)
-    gps_task = task.LoopingCall(readGPS,[persistent, ser, NSEW_limits, start_time]).start(1.0/gps_fs)
+    #imu_task = task.LoopingCall(readIMU,[persistent,imu_file]).start(1.0/imu_fs)
+    #bmp_task = task.LoopingCall(readBMP,[persistent,bmp_file]).start(1.0/bmp_fs)
+    gps_task = task.LoopingCall(readGPS,[persistent, ser, NSEW_limits, gps_file]).start(1.0/gps_fs)
     beeper_task = task.LoopingCall(beeper,[persistent]).start(1.0)
     fuser_task = task.LoopingCall(fuser,[persistent]).start(1.0)
-    
+
     reactor.run()
 
