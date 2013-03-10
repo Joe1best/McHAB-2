@@ -11,8 +11,9 @@ import RPi.GPIO as GPIO
 import L3G4200D as L3G
 import LSM303DLM as LSM
 import BMP085 as BMP
+import attitude
 
-beeper_pin = 21
+beeper_pin = 23
 fuser_pin = 18
 mission_time = 120 * 60 * 1000.0 #120 mins. --> millisec
 
@@ -73,7 +74,7 @@ def readGPS(arg):
 
             if(arg[0].gps_fix):
                 coord = [float(line[2]),float(line[4])]
-                if( coord[0] > NSEW[0] or coord[0] < NSEW[1] or coord[1] < NSEW[2] or coord[1] > NSEW[3] ):
+                if( coord[0] > arg[2][0] or coord[0] < arg[2][1] or coord[1] < arg[2][2] or coord[1] > arg[2][3] ):
                     print 'Reached the boundary limits'
                     arg[0].boundary_reached = True
                 if(float(line[8]) > 152.4):
@@ -86,8 +87,10 @@ def beeper(arg):
         if(not arg[0].beep_high):
             GPIO.output(beeper_pin,GPIO.HIGH)
             arg[0].beep_high = True
+            print 'HIGH'
         else:
             GPIO.output(beeper_pin,GPIO.LOW)
+            print 'LOW'
             arg[0].beep_time = arg[0].beep_time + 1
             if(arg[0].beep_time > 9):
                 arg[0].beep_high = False
@@ -112,7 +115,7 @@ def fuser(arg):
             print 'Fired fuser'
             arg[0].fuser_count = arg[0].fuser_count + 1
 
-        elif(arg[0].mission_start and (time.time()*1000.0-arg[0].start_time > 10*1000.0)):
+        elif(arg[0].mission_start and (time.time()*1000.0-arg[0].start_time > 30*1000.0)):
             GPIO.output(fuser_pin,GPIO.HIGH)
             print 'Fired fuser'
             arg[0].fuser_count = arg[0].fuser_count + 1
@@ -121,6 +124,10 @@ def fuser(arg):
             arg[0].fuser_fired = True
             GPIO.output(fuser_pin,GPIO.LOW)
             print 'Turned off fuser'
+
+def estimator(arg):
+    print(arg[1].getAttitude())
+
 
 if __name__ == '__main__':
     #Create log files
@@ -137,6 +144,7 @@ if __name__ == '__main__':
     lsm = LSM.LSM303DLM()
     lsm.enableDefault()
     ser = serial.Serial('/dev/ttyAMA0', 4800, timeout=0.1)
+    att = attitude.attitude(lsm,l3g)
 
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(beeper_pin,GPIO.OUT)
@@ -149,9 +157,10 @@ if __name__ == '__main__':
     NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+20]
 
     #Sampling Frequencies
-    imu_fs = 10.0
+    imu_fs = 50.0
     bmp_fs = 2.0
     gps_fs = 1.0
+    estim_fs = 10.0
 
     #Object container initializations
     persistent = PersistantVars(lsm, l3g, BMP.BMP085())
@@ -159,8 +168,9 @@ if __name__ == '__main__':
     #imu_task = task.LoopingCall(readIMU,[persistent,imu_file]).start(1.0/imu_fs)
     #bmp_task = task.LoopingCall(readBMP,[persistent,bmp_file]).start(1.0/bmp_fs)
     gps_task = task.LoopingCall(readGPS,[persistent, ser, NSEW_limits, gps_file]).start(1.0/gps_fs)
-    beeper_task = task.LoopingCall(beeper,[persistent]).start(1.0)
-    fuser_task = task.LoopingCall(fuser,[persistent]).start(1.0)
+    #beeper_task = task.LoopingCall(beeper,[persistent]).start(1.0)
+    #fuser_task = task.LoopingCall(fuser,[persistent]).start(1.0)
+    estimater_task = task.LoopingCall(estimator,[persistent,att]).start(1.0/estim_fs)
 
     reactor.run()
 

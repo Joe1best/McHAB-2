@@ -12,7 +12,7 @@ import time
 import LSM303DLM as LSM
 import L3G4200D as L3G
 
-class Attitude:
+class attitude:
     F_sample = 40
     T_sample = 1.0/F_sample
     GYRO_FS = 250 #16 bit register
@@ -24,14 +24,11 @@ class Attitude:
 
     initial=time.time()*1000.0
 
-    def __init__(self):
+    def __init__(self,lsm,l3g):
         self.firstRun = True
-        self.initialTime = time.time()*1000
 
-        self.lsm = LSM.LSM303DLM()
-        self.lsm.enableDefault()
-        self.l3g = L3G.L3G4200D()
-        self.l3g.enableDefault()
+        self.lsm = lsm
+        self.l3g = l3g
 
     def normalize(self,array):
         temp=math.sqrt(array[0][0]**2+array[1][0]**2+array[2][0]**2)
