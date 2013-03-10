@@ -106,14 +106,21 @@ def beeper(arg):
 
 def fuser(arg):
     print str(time.time()*1000.0-arg[0].start_time)
-    if(arg[0].boundary_reached and not arg[0].fuser_fired):
-        GPIO.output(pin_pin,GPIO.HIGH)
-        print 'Fired fuser'
-        arg[0].fuser_count = arg[0].fuser_count + 1
-    elif(arg[0].mission_start and not arg[0].fuser_fired and (time.time()*1000.0-arg[0].start_time > 10*1000.0)):
-        GPIO.output(fuser_pin,GPIO.HIGH)
-        print 'Fired fuser'
-        arg[0].fuser_count = arg[0].fuser_count + 1
+    if(not arg[0].fuser_fired):
+        if(arg[0].boundary_reached):
+            GPIO.output(pin_pin,GPIO.HIGH)
+            print 'Fired fuser'
+            arg[0].fuser_count = arg[0].fuser_count + 1
+
+        elif(arg[0].mission_start and (time.time()*1000.0-arg[0].start_time > 10*1000.0)):
+            GPIO.output(fuser_pin,GPIO.HIGH)
+            print 'Fired fuser'
+            arg[0].fuser_count = arg[0].fuser_count + 1
+
+        if(arg[0].fuser_count > 5):
+            arg[0].fuser_fired = True
+            GPIO.output(fuser_pin,GPIO.LOW)
+            print 'Turned off fuser'
 
 if __name__ == '__main__':
     #Create log files
@@ -130,10 +137,12 @@ if __name__ == '__main__':
     lsm = LSM.LSM303DLM()
     lsm.enableDefault()
     ser = serial.Serial('/dev/ttyAMA0', 4800, timeout=0.1)
+
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(beeper_pin,GPIO.OUT)
-    GPIO.output(beeper_pin,GPIO.LOW)
     GPIO.setup(fuser_pin,GPIO.OUT)
+
+    GPIO.output(beeper_pin,GPIO.LOW)
     GPIO.output(fuser_pin,GPIO.LOW)
 
     #Constants
