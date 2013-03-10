@@ -12,8 +12,8 @@ import L3G4200D as L3G
 import LSM303DLM as LSM
 import BMP085 as BMP
 
-beeper_pin = 18
-fuser_pin = 21
+beeper_pin = 21
+fuser_pin = 18
 mission_time = 120 * 60 * 1000.0 #120 mins. --> millisec
 
 class PersistantVars:
@@ -86,10 +86,8 @@ def beeper(arg):
         if(not arg[0].beep_high):
             GPIO.output(beeper_pin,GPIO.HIGH)
             arg[0].beep_high = True
-            print 'High'
         else:
             GPIO.output(beeper_pin,GPIO.LOW)
-            print 'Low'
             arg[0].beep_time = arg[0].beep_time + 1
             if(arg[0].beep_time > 9):
                 arg[0].beep_high = False
@@ -99,10 +97,8 @@ def beeper(arg):
         if(not arg[0].beep_high):
             GPIO.output(beeper_pin,GPIO.HIGH)
             arg[0].beep_high = True
-            print 'High'
         else:
             GPIO.output(beeper_pin,GPIO.LOW)
-            print 'Low'
             arg[0].beep_count = arg[0].beep_count + 1
             arg[0].beep_high = False
             if(arg[0].beep_count > 4):
@@ -113,11 +109,11 @@ def fuser(arg):
     if(arg[0].boundary_reached and not arg[0].fuser_fired):
         GPIO.output(pin_pin,GPIO.HIGH)
         print 'Fired fuser'
-        arg[0].fuser_count = fuser_count + 1
-    elif(arg[0].mission_start and not arg[0].fuser_fired and (time.time*1000.0-arg[0].start_time > 10*1000.0)):
+        arg[0].fuser_count = arg[0].fuser_count + 1
+    elif(arg[0].mission_start and not arg[0].fuser_fired and (time.time()*1000.0-arg[0].start_time > 10*1000.0)):
         GPIO.output(fuser_pin,GPIO.HIGH)
         print 'Fired fuser'
-        arg[0].fuser_count = fuser_count + 1
+        arg[0].fuser_count = arg[0].fuser_count + 1
 
 if __name__ == '__main__':
     #Create log files
@@ -136,7 +132,9 @@ if __name__ == '__main__':
     ser = serial.Serial('/dev/ttyAMA0', 4800, timeout=0.1)
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(beeper_pin,GPIO.OUT)
+    GPIO.output(beeper_pin,GPIO.LOW)
     GPIO.setup(fuser_pin,GPIO.OUT)
+    GPIO.output(fuser_pin,GPIO.LOW)
 
     #Constants
     NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+20]
