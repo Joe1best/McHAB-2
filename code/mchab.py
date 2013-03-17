@@ -35,8 +35,9 @@ class PersistantVars:
     beep_gps = False
     beep_time = 0
 
-    mission_start = False
-    start_time = 0.0
+    mission_start = True
+    start_time = time.time()*1000.0
+    mission_finished = False
 
     def __init__(self, lsm, l3g, bmp):
         self.lsm = lsm
@@ -108,13 +109,15 @@ def beeper(arg):
                 arg[0].beep_gps = True
 
 def fuser(arg):
+    print str(time.time()*1000.0-arg[0].start_time)
     if(arg[0].boundary_reached and not arg[0].fuser_fired):
         GPIO.output(pin_pin,GPIO.HIGH)
         print 'Fired fuser'
         arg[0].fuser_count = fuser_count + 1
-    if(arg[0].fuser_count > 60):
-        GPIO.output(pin_pin,GPIO.LOW)
-        arg[0].fuser_fired = True
+    elif(arg[0].mission_start and not arg[0].fuser_fired and (time.time*1000.0-arg[0].start_time > 10*1000.0)):
+        GPIO.output(fuser_pin,GPIO.HIGH)
+        print 'Fired fuser'
+        arg[0].fuser_count = fuser_count + 1
 
 if __name__ == '__main__':
     #Create log files
