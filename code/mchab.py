@@ -4,47 +4,46 @@ from twisted.internet import reactor
 import time
 import datetime
 import os
+import serial
 
 import RPi.GPIO as GPIO
 
 import L3G4200D as L3G
 import LSM303DLM as LSM
 import BMP085 as BMP
-import GPS
 
-class IMU_Params:
+class PersistantVars:
     accel = []
     gyro = []
     mag = []
-
-    def __init__(self, lsm, l3g):
-        self.lsm = lsm
-        self.l3g = l3g
-
-class BMP_Params:
+    
     alt = 0
     pressure = 0
     temp = 0
+    
+    gps_fixed = False
 
-    def __init__(self, bmp):
-        self.bmp = bmp
+    def __init__(self, lsm, l3g, bmp):
+        self.lsm = lsm
+        self.l3g = l3g
+        self.bmp = bmp     
 
 def readIMU(arg):
-    print 'IMU Read: ' + str(datetime.datetime.now())
+    print 'IMU Read: ' + str(datetime.datetime.now()),
     arg[0].accel = arg[0].lsm.readRawAccel()
     arg[0].mag = arg[0].lsm.readRawMag()
     arg[0].gyro = arg[0].l3g.readRawGyro()
     print 'accel: ' + str(arg[0].accel) + ';gyro: ' + str(arg[0].gyro) + ';mag: ' + str(arg[0].mag)
 
 def readBMP(arg):
-    print 'BMP read: ' + str(datetime.datetime.now())
+    print 'BMP read: ' + str(datetime.datetime.now()),
     arg[0].temp = arg[0].bmp.readTemperature()
     arg[0].pressure = arg[0].bmp.readPressure()
     arg[0].altitude = arg[0].bmp.readAltitude()
     print 'temp: ' + str(arg[0].temp) + ';pressure: ' + str(arg[0].pressure) + ';altitude: ' + str(arg[0].altitude)
 
 def readGPS(arg):
-    print 'GPS read: ' + str(datetime.datetime.now())
+    print 'GPS read: ' + str(datetime.datetime.now()),
 
 if __name__ == '__main__':
     #Create log files
@@ -60,12 +59,12 @@ if __name__ == '__main__':
     l3g.enableDefault()
     lsm = LSM.LSM303DLM()
     lsm.enableDefault()
-
-    gps = GPS.GPS()
-
+    ser = serial.Serial('/dev/ttyAMA0', 4800, timeout=0.1)
+    
     #Constants
     NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+20]
     start_time = time.time()*1000.0
+    mission_time = 120*60*1000.0
 
     #Sampling Frequencies
     imu_fs = 10.0
@@ -73,12 +72,11 @@ if __name__ == '__main__':
     gps_fs = 1.0
 
     #Object container initializations
-    imu = IMU_Params(lsm, l3g)
-    bmp = BMP_Params(BMP.BMP085())
+    persistent = PersistantVars(lsm, l3g, BMP.BMP085())
 
-    imu_task = task.LoopingCall(readIMU,[imu]).start(1.0/imu_fs)
-    bmp_task = task.LoopingCall(readBMP,[bmp]).start(1.0/bmp_fs)
-    gps_task = task.LoopingCall(readGPS,[gps]).start(1.0/gps_fs)
+    imu_task = task.LoopingCall(readIMU,[persistent]).start(1.0/imu_fs)
+    bmp_task = task.LoopingCall(readBMP,[persistent]).start(1.0/bmp_fs)
+    gps_task = task.LoopingCall(readGPS,[persistent, ser, NSEW_limits, start_time]).start(1.0/gps_fs)
 
     reactor.run()
 
