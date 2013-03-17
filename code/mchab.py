@@ -12,6 +12,9 @@ import L3G4200D as L3G
 import LSM303DLM as LSM
 import BMP085 as BMP
 
+beeper_pin = 18
+fuser_pin = 21
+
 class PersistantVars:
     accel = []
     gyro = []
@@ -22,6 +25,9 @@ class PersistantVars:
     temp = 0
 
     gps_fix = False
+    boundary_reached = False
+    fuser_count = 0
+    fuser_fired = False
 
     beep_high = False
     beep_count = 0
@@ -76,11 +82,11 @@ def readGPS(arg):
 def beeper(arg):
     if(not arg[0].gps_fix):
         if(not arg[0].beep_high):
-            GPIO.output(25,GPIO.HIGH)
+            GPIO.output(beeper_pin,GPIO.HIGH)
             arg[0].beep_high = True
             print 'High'
         else:
-            GPIO.output(25,GPIO.LOW)
+            GPIO.output(beeper_pin,GPIO.LOW)
             print 'Low'
             arg[0].beep_time = arg[0].beep_time + 1
             if(arg[0].beep_time > 9):
@@ -89,16 +95,25 @@ def beeper(arg):
 
     elif(not arg[0].beep_gps and arg[0].gps_fix):
         if(not arg[0].beep_high):
-            GPIO.output(25,GPIO.HIGH)
+            GPIO.output(beeper_pin,GPIO.HIGH)
             arg[0].beep_high = True
             print 'High'
         else:
-            GPIO.output(25,GPIO.LOW)
+            GPIO.output(beeper_pin,GPIO.LOW)
             print 'Low'
             arg[0].beep_count = arg[0].beep_count + 1
             arg[0].beep_high = False
             if(arg[0].beep_count > 4):
                 arg[0].beep_gps = True
+                
+def fuser(arg):
+    if(arg[0].boundary_reached and not arg[0].fuser_fired):
+        GPIO.output(pin_pin,GPIO.HIGH)
+        print 'Fired fuser'
+        fuser_count = fuser_count + 1
+    if(fuser_count > 60):
+        GPIO.output(pin_pin,GPIO.LOW)
+        fuser_fired = True
 
 if __name__ == '__main__':
     #Create log files
@@ -116,7 +131,8 @@ if __name__ == '__main__':
     lsm.enableDefault()
     ser = serial.Serial('/dev/ttyAMA0', 4800, timeout=0.1)
     GPIO.setmode(GPIO.BCM)
-    GPIO.setup(25,GPIO.OUT)
+    GPIO.setup(beeper_pin,GPIO.OUT)
+    GPIO.setup(fuser_pin,GPIO.OUT)
 
     #Constants
     NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+20]
@@ -133,6 +149,7 @@ if __name__ == '__main__':
     #bmp_task = task.LoopingCall(readBMP,[persistent]).start(1.0/bmp_fs)
     gps_task = task.LoopingCall(readGPS,[persistent, ser, NSEW_limits, start_time]).start(1.0/gps_fs)
     beeper_task = task.LoopingCall(beeper,[persistent]).start(1.0)
-
+    fuser_task = task.LoopingCall(fuser,[persistent]).start(1.0)
+    
     reactor.run()
 
