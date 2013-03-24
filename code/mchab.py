@@ -8,11 +8,13 @@ import serial
 import math
 
 import RPi.GPIO as GPIO
+import Adafruit_MCP4725 as MCP4725
 
 import L3G4200D as L3G
 import LSM303DLM as LSM
 import BMP085 as BMP
 import attitude
+import control
 
 beeper_pin = 23
 fuser_pin = 18
@@ -23,6 +25,10 @@ class PersistantVars:
     gyro = []
     mag = []
     mag_field = []
+
+    estimated_euler = []
+    ang_vel = []
+    rpm = 0
 
     alt = 0
     pressure = 0
@@ -47,12 +53,18 @@ class PersistantVars:
         self.l3g = l3g
         self.bmp = bmp
 
+def convert_gyro(array):
+    conv = lambda x: (float(x)/(2**15))*250
+    return [conv(array[0]),conv(array[1]),conv(array[2])]
+
 def readIMU(arg):
     #print 'IMU Read: ' + str(datetime.datetime.now()),
     arg[0].accel = arg[0].lsm.readRawAccel()
     arg[0].mag = arg[0].lsm.readRawMag()
     arg[0].gyro = arg[0].l3g.readRawGyro()
-    print 'accel: ' + str(arg[0].accel) + ';gyro: ' + str(arg[0].gyro) + ';mag: ' + str(arg[0].mag)
+    arg[0].ang_vel = convert_gyro(arg[0].gyro)
+
+    #print 'accel: ' + str(arg[0].accel) + ';gyro: ' + str(arg[0].gyro) + ';mag: ' + str(arg[0].mag)
 
 def readBMP(arg):
     #print 'BMP read: ' + str(datetime.datetime.now()),
@@ -174,8 +186,16 @@ def fuser(arg):
             print 'Turned off fuser'
 
 def estimator(arg):
-    print(arg[1].getAttitude())
+    arg[0].estimated_euler = arg[1].getAttitude()
 
+def control_func(arg):
+    kp = 0.05
+    kd = 0.05
+    tau = -kp*arg[0].estimated_euler[0]*math.pi/180.0 - kd*arg[0].ang_vel[2]*math.pi/180.0
+    I_motor = 1.21*10**-4
+    f_s = 10.0
+    arg[0].rpm = arg[0].rpm + 1.0/f_s*tau/I_motor
+    print arg[0].rpm
 
 if __name__ == '__main__':
     #Create log files
@@ -193,13 +213,17 @@ if __name__ == '__main__':
     lsm.enableDefault()
     ser = serial.Serial('/dev/ttyAMA0', 4800, timeout=0.1)
     att = attitude.attitude(lsm,l3g)
+    dac = MCP4725.MCP4725(0x60)
+    con = control.control(dac)
 
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(beeper_pin,GPIO.OUT)
     GPIO.setup(fuser_pin,GPIO.OUT)
+    GPIO.setup(4,GPIO.OUT)
 
     GPIO.output(beeper_pin,GPIO.LOW)
     GPIO.output(fuser_pin,GPIO.LOW)
+    GPIO.output(4,GPIO.LOW)
 
     #Constants
     NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+20]
@@ -213,12 +237,13 @@ if __name__ == '__main__':
     #Object container initializations
     persistent = PersistantVars(lsm, l3g, BMP.BMP085())
 
-    #imu_task = task.LoopingCall(readIMU,[persistent,imu_file]).start(1.0/imu_fs)
+    imu_task = task.LoopingCall(readIMU,[persistent,imu_file]).start(1.0/imu_fs)
     #bmp_task = task.LoopingCall(readBMP,[persistent,bmp_file]).start(1.0/bmp_fs)
-    gps_task = task.LoopingCall(readGPS,[persistent, ser, NSEW_limits, gps_file]).start(1.0/gps_fs)
+    #gps_task = task.LoopingCall(readGPS,[persistent, ser, NSEW_limits, gps_file]).start(1.0/gps_fs)
     #beeper_task = task.LoopingCall(beeper,[persistent]).start(1.0)
     #fuser_task = task.LoopingCall(fuser,[persistent]).start(1.0)
-    #estimater_task = task.LoopingCall(estimator,[persistent,att]).start(1.0/estim_fs)
+    estimater_task = task.LoopingCall(estimator,[persistent,att]).start(1.0/estim_fs)
+    control_task = task.LoopingCall(control_func,[persistent,con]).start(1.0/5.0)
 
     reactor.run()
 

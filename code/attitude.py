@@ -22,6 +22,8 @@ class attitude:
     b_d = np.array([[-0.52031361] , [0.56860619] , [0.6371505]])
     C_d = np.identity(3)
 
+    C_em = np.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]])
+
     initial=time.time()*1000.0
 
     def __init__(self,lsm,l3g):
@@ -59,6 +61,10 @@ class attitude:
         mx,my,mz = self.lsm.readRawMag()
         line=[ax,ay,az,gx,gy,gz,mx,my,mz]
         norm_accel,omega_measured,norm_magne = self.parseData(line)
+
+        norm_accel = np.dot(self.C_em, norm_accel)
+        omega_measured = np.dot(self.C_em, omega_measured)
+        norm_magne = np.dot(self.C_em, norm_magne)
 
         if(self.firstRun):
             self.b_d=np.array([[norm_magne[0][0]],[norm_magne[1][0]],[norm_magne[2][0]]])
