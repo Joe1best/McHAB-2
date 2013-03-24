@@ -5,6 +5,7 @@ import time
 import datetime
 import os
 import serial
+import math
 
 import RPi.GPIO as GPIO
 
@@ -61,7 +62,7 @@ def readBMP(arg):
     print 'temp: ' + str(arg[0].temp) + ';pressure: ' + str(arg[0].pressure) + ';altitude: ' + str(arg[0].altitude)
 
 def readGPS(arg):
-    #print 'GPS read: ' + str(datetime.datetime.now())
+    print 'GPS read: ' + str(datetime.datetime.now())
     #If there's something in the serial buffer, get it
     while(arg[1].inWaiting()>0):
         line = arg[1].readline().rstrip().split(',')
@@ -75,6 +76,7 @@ def readGPS(arg):
 
             if(arg[0].gps_fix):
                 coord = [float(line[2]),float(line[4])]
+                print coord
                 if( coord[0] > arg[2][0] or coord[0] < arg[2][1] or coord[1] < arg[2][2] or coord[1] > arg[2][3] ):
                     print 'Reached the boundary limits'
                     arg[0].boundary_reached = True
@@ -82,50 +84,52 @@ def readGPS(arg):
                     arg[0].mission_start = True
                     print 'Reached 500ft, Mission Start'
                     arg[0].start_time = time.time()*1000.0
+
                 magField(arg, line)
 
 
-def convertGPS(latitude, longitude)
+def convertGPS(latitude, longitude):
     #take latitude and longitude strings with minutes and seconds
     #convert to degrees
-    latitude = float(int(float(latitude)/100) + (float(latitude)%100)/60
+    latitude = float(int(float(latitude)/100)) + (float(latitude)%100)/60
     longitude = float(int(float(longitude)/100)) + (float(longitude)%100)/60
-    
+
     return latitude, longitude
-    
+
 def magField(arg, gps_str):
     #calculate magnetic field vector in inertial frame
     Re = 6378.1*(10**3)
     g0 = (-29496.5 + 11.4*3)*10**(-9)
     g1 = (-1585.9 + 16.7*3)*10**(-9)
     h1 = (4945.1 - 28.8*3)*10**(-9)
-    
+
     lat_str = gps_str[2]
     long_str = gps_str[4]
-    
+
     latitude, longitude = convertGPS(lat_str, long_str)
-    
-    if gps_str[5] == 'W'
+
+    if gps_str[5] == 'W':
         longitude = 360 - longitude
-    if gps_str[3] == 'S'
+    if gps_str[3] == 'S':
         latitude = -latitude
-    
+
     #coelevation
-    theta = math.pi/2 - latitude
-    phi = longitude
-    
+    theta = math.pi/2 - latitude*math.pi/180.0
+    phi = longitude*math.pi/180.0
+
     rb = float(gps_str[9]) + Re
-    
+
     br = 2*(Re/rb)**3*(g0*math.cos(theta)+(g1*math.cos(phi)+h1*math.sin(phi))*math.sin(theta))
     btheta = (Re/rb)**3*(g0*math.sin(theta)-(g1*math.cos(phi)+h1*math.sin(phi))*math.cos(theta))
     bphi = (Re/rb)**3*(g1*math.sin(phi)-h1*math.cos(phi))
-    
+
     bx = br*math.sin(btheta)*math.cos(bphi)
     by = br*math.sin(btheta)*math.sin(bphi)
     bz = br*math.cos(btheta)
-    
+
     arg[0].mag_field = [bx, by, bz]
-    
+    print arg[0].mag_field
+
 def beeper(arg):
     if(not arg[0].gps_fix):
         if(not arg[0].beep_high):
@@ -214,7 +218,7 @@ if __name__ == '__main__':
     gps_task = task.LoopingCall(readGPS,[persistent, ser, NSEW_limits, gps_file]).start(1.0/gps_fs)
     #beeper_task = task.LoopingCall(beeper,[persistent]).start(1.0)
     #fuser_task = task.LoopingCall(fuser,[persistent]).start(1.0)
-    estimater_task = task.LoopingCall(estimator,[persistent,att]).start(1.0/estim_fs)
+    #estimater_task = task.LoopingCall(estimator,[persistent,att]).start(1.0/estim_fs)
 
     reactor.run()
 
