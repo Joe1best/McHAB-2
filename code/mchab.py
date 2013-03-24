@@ -21,6 +21,7 @@ class PersistantVars:
     accel = []
     gyro = []
     mag = []
+    mag_field = []
 
     alt = 0
     pressure = 0
@@ -81,7 +82,50 @@ def readGPS(arg):
                     arg[0].mission_start = True
                     print 'Reached 500ft, Mission Start'
                     arg[0].start_time = time.time()*1000.0
+                magField(arg, line)
 
+
+def convertGPS(latitude, longitude)
+    #take latitude and longitude strings with minutes and seconds
+    #convert to degrees
+    latitude = float(int(float(latitude)/100) + (float(latitude)%100)/60
+    longitude = float(int(float(longitude)/100)) + (float(longitude)%100)/60
+    
+    return latitude, longitude
+    
+def magField(arg, gps_str):
+    #calculate magnetic field vector in inertial frame
+    Re = 6378.1*(10**3)
+    g0 = (-29496.5 + 11.4*3)*10**(-9)
+    g1 = (-1585.9 + 16.7*3)*10**(-9)
+    h1 = (4945.1 - 28.8*3)*10**(-9)
+    
+    lat_str = gps_str[2]
+    long_str = gps_str[4]
+    
+    latitude, longitude = convertGPS(lat_str, long_str)
+    
+    if gps_str[5] == 'W'
+        longitude = 360 - longitude
+    if gps_str[3] == 'S'
+        latitude = -latitude
+    
+    #coelevation
+    theta = math.pi/2 - latitude
+    phi = longitude
+    
+    rb = float(gps_str[9]) + Re
+    
+    br = 2*(Re/rb)**3*(g0*math.cos(theta)+(g1*math.cos(phi)+h1*math.sin(phi))*math.sin(theta))
+    btheta = (Re/rb)**3*(g0*math.sin(theta)-(g1*math.cos(phi)+h1*math.sin(phi))*math.cos(theta))
+    bphi = (Re/rb)**3*(g1*math.sin(phi)-h1*math.cos(phi))
+    
+    bx = br*math.sin(btheta)*math.cos(bphi)
+    by = br*math.sin(btheta)*math.sin(bphi)
+    bz = br*math.cos(btheta)
+    
+    arg[0].mag_field = [bx, by, bz]
+    
 def beeper(arg):
     if(not arg[0].gps_fix):
         if(not arg[0].beep_high):
