@@ -168,14 +168,13 @@ def beeper(arg):
                 arg[0].beep_gps = True
 
 def fuser(arg):
-    print str(time.time()*1000.0-arg[0].start_time)
     if(not arg[0].fuser_fired):
         if(arg[0].boundary_reached):
             GPIO.output(pin_pin,GPIO.HIGH)
             print 'Fired fuser'
             arg[0].fuser_count = arg[0].fuser_count + 1
 
-        elif(arg[0].mission_start and (time.time()*1000.0-arg[0].start_time > 30*1000.0)):
+        elif(arg[0].mission_start and (time.time()*1000.0-arg[0].start_time > mission_time)):
             GPIO.output(fuser_pin,GPIO.HIGH)
             print 'Fired fuser'
             arg[0].fuser_count = arg[0].fuser_count + 1
