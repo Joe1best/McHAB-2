@@ -18,6 +18,7 @@ import control
 
 beeper_pin = 23
 fuser_pin = 18
+motor_pin = 4
 mission_time = 120 * 60 * 1000.0 #120 mins. --> millisec
 
 class PersistantVars:
@@ -218,11 +219,11 @@ if __name__ == '__main__':
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(beeper_pin,GPIO.OUT)
     GPIO.setup(fuser_pin,GPIO.OUT)
-    GPIO.setup(4,GPIO.OUT)
+    GPIO.setup(motor_pin,GPIO.OUT)
 
     GPIO.output(beeper_pin,GPIO.LOW)
     GPIO.output(fuser_pin,GPIO.LOW)
-    GPIO.output(4,GPIO.LOW)
+    GPIO.output(motor_pin,GPIO.LOW)
 
     #Constants
     NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+20]
