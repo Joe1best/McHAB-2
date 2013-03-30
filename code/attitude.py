@@ -26,7 +26,7 @@ class attitude:
 
     initial=time.time()*1000.0
 
-    def __init__(self,lsm,l3g):
+    def __init__(self):
         self.firstRun = True
 
     def normalize(self,array):
@@ -52,10 +52,10 @@ class attitude:
 
         return norm_accel, omega_measured, norm_magne
 
-    def getAttitude(arg):
-        ax,ay,az = arg[0].accel
-        gx,gy,gz = arg[0].gyro
-        mx,my,mz = arg[0].mag
+    def getAttitude(self,arg):
+        ax,ay,az = arg.accel
+        gx,gy,gz = arg.gyro
+        mx,my,mz = arg.mag
         line=[ax,ay,az,gx,gy,gz,mx,my,mz]
         norm_accel,omega_measured,norm_magne = self.parseData(line)
 

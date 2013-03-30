@@ -26,7 +26,7 @@ class PersistantVars:
     gyro = []
     mag = []
     mag_field = []
-    
+
     NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+20]
 
     estimated_euler = []
@@ -47,7 +47,7 @@ class PersistantVars:
     beep_gps = False
     beep_time = 0
 
-    mission_start = True
+    mission_start = False
     start_time = time.time()*1000.0
     mission_finished = False
 
@@ -65,7 +65,7 @@ def readBMP(arg):
     arg[0].temp = arg[0].bmp.readTemperature()
     arg[0].pressure = arg[0].bmp.readPressure()
     arg[0].altitude = arg[0].bmp.readAltitude()
-    
+
     print 'temp: ' + str(arg[0].temp) + ';pressure: ' + str(arg[0].pressure) + ';altitude: ' + str(arg[0].altitude)
     arg[1].write(str(datetime.datetime.now()) + '; temp: ' + str(arg[0].temp) + ';pressure: ' + str(arg[0].pressure) + ';altitude: ' + str(arg[0].altitude) + '\n')
 
@@ -74,31 +74,32 @@ def readGPS(arg):
     while(arg[1].inWaiting()>0):
         line = arg[1].readline().rstrip().split(',')
         arg[1].write(str(datetime.datetime.now()) + str(line) + '\n')
-        
+        print line
+
         #Only look at the GPGGA sentence
         if(line[0]=='$GPGGA'):
             coord = []
-            
+
             #Check if there's a fix
             if((line[6]=='1' or line[6]=='2') and arg[0].gps_fix==False):
                 coord = [float(line[2]),float(line[4])]
                 print 'We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1])
-                arg[2].write('We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1]) + '\n')
+                arg[2].write(str(datetime.datetime.now())+'; We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1]) + '\n')
                 arg[0].gps_fix=True
-            
+
             #If there's a fix, check boundary conditions and altitude
             if(arg[0].gps_fix):
                 coord = [float(line[2]),float(line[4])]
-                
+
                 if( coord[0] > arg[0].NSEW_limits[0] or coord[0] < arg[0].NSEW_limits[1] or coord[1] < arg[0].NSEW_limits[2] or coord[1] > arg[0].NSEW_limits[3] ):
                     print 'Reached the boundary limits'
-                    arg[2].write('Reached the boundary limits\n')
+                    arg[2].write(str(datetime.datetime.now())+'; Reached the boundary limits\n')
                     arg[0].boundary_reached = True
-                    
-                if(float(line[8]) > 152.4):
+
+                if(float(line[9]) > 152.4 and not arg[0].mission_start):
                     arg[0].mission_start = True
                     print 'Reached 500ft, Mission Start'
-                    arg[2].write('Reached 500ft, Mission Start'\n')
+                    arg[2].write(str(datetime.datetime.now()) + '; Reached 500ft, Mission Start\n')
                     arg[0].start_time = time.time()*1000.0
 
                 #magField(arg, line)
@@ -176,31 +177,31 @@ def beeper(arg):
 def fuser(arg):
     if(not arg[0].fuser_fired):
         if(arg[0].boundary_reached):
-            GPIO.output(pin_pin,GPIO.HIGH)
+            GPIO.output(fuser_pin,GPIO.HIGH)
             print 'Fired fuser'
-            arg[1].write('Fired fuser\n'
+            arg[1].write('Fired fuser\n')
             arg[0].fuser_count = arg[0].fuser_count + 1
 
         elif(arg[0].mission_start and (time.time()*1000.0-arg[0].start_time > mission_time)):
             GPIO.output(fuser_pin,GPIO.HIGH)
             print 'Fired fuser'
-            arg[1].write('Fired fuser\n'
+            arg[1].write('Fired fuser\n')
             arg[0].fuser_count = arg[0].fuser_count + 1
 
         if(arg[0].fuser_count > 5):
             arg[0].fuser_fired = True
             GPIO.output(fuser_pin,GPIO.LOW)
             print 'Turned off fuser'
-            arg[1].write('Turned off fuser\n'
+            arg[1].write('Turned off fuser\n')
 
 def estimator(arg):
     arg[0].accel = arg[0].lsm.readRawAccel()
     arg[0].mag = arg[0].lsm.readRawMag()
     arg[0].gyro = arg[0].l3g.readRawGyro()
     arg[0].ang_vel = convert_gyro(arg[0].gyro)
-   
+
     arg[0].estimated_euler = arg[1].getAttitude(arg[0])
-    
+
     arg[2].write(str(datetime.datetime.now()) + 'accel: ' + str(arg[0].accel) + ';gyro: ' + str(arg[0].gyro) + ';mag: ' + str(arg[0].mag) + '\n')
     arg[3].write(str(datetime.datetime.now()) + str(arg[0].estimated_euler) + '\n')
 
