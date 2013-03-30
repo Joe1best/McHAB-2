@@ -27,7 +27,7 @@ class PersistantVars:
     mag = []
     mag_field = []
 
-    NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+20]
+    NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+28]
 
     estimated_euler = []
     ang_vel = []
@@ -73,7 +73,7 @@ def readGPS(arg):
     #If there's something in the serial buffer, get it
     while(arg[1].inWaiting()>0):
         line = arg[1].readline().rstrip().split(',')
-        arg[1].write(str(datetime.datetime.now()) + str(line) + '\n')
+        arg[2].write(str(datetime.datetime.now()) + '; ' + str(line) + '\n')
         print line
 
         #Only look at the GPGGA sentence
@@ -84,7 +84,7 @@ def readGPS(arg):
             if((line[6]=='1' or line[6]=='2') and arg[0].gps_fix==False):
                 coord = [float(line[2]),float(line[4])]
                 print 'We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1])
-                arg[2].write(str(datetime.datetime.now())+'; We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1]) + '\n')
+                arg[3].write(str(datetime.datetime.now())+'; We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1]) + '\n')
                 arg[0].gps_fix=True
 
             #If there's a fix, check boundary conditions and altitude
@@ -93,13 +93,13 @@ def readGPS(arg):
 
                 if( coord[0] > arg[0].NSEW_limits[0] or coord[0] < arg[0].NSEW_limits[1] or coord[1] < arg[0].NSEW_limits[2] or coord[1] > arg[0].NSEW_limits[3] ):
                     print 'Reached the boundary limits'
-                    arg[2].write(str(datetime.datetime.now())+'; Reached the boundary limits\n')
+                    arg[3].write(str(datetime.datetime.now())+'; Reached the boundary limits\n')
                     arg[0].boundary_reached = True
 
                 if(float(line[9]) > 152.4 and not arg[0].mission_start):
                     arg[0].mission_start = True
                     print 'Reached 500ft, Mission Start'
-                    arg[2].write(str(datetime.datetime.now()) + '; Reached 500ft, Mission Start\n')
+                    arg[3].write(str(datetime.datetime.now()) + '; Reached 500ft, Mission Start\n')
                     arg[0].start_time = time.time()*1000.0
 
                 #magField(arg, line)
@@ -179,13 +179,13 @@ def fuser(arg):
         if(arg[0].boundary_reached):
             GPIO.output(fuser_pin,GPIO.HIGH)
             print 'Fired fuser'
-            arg[1].write('Fired fuser\n')
+            arg[1].write('Fired fuser, over boundary\n')
             arg[0].fuser_count = arg[0].fuser_count + 1
 
         elif(arg[0].mission_start and (time.time()*1000.0-arg[0].start_time > mission_time)):
             GPIO.output(fuser_pin,GPIO.HIGH)
-            print 'Fired fuser'
-            arg[1].write('Fired fuser\n')
+            print 'Fired fuser, overtime'
+            arg[1].write('Fired fuser, overtime\n')
             arg[0].fuser_count = arg[0].fuser_count + 1
 
         if(arg[0].fuser_count > 5):
@@ -202,8 +202,8 @@ def estimator(arg):
 
     arg[0].estimated_euler = arg[1].getAttitude(arg[0])
 
-    arg[2].write(str(datetime.datetime.now()) + 'accel: ' + str(arg[0].accel) + ';gyro: ' + str(arg[0].gyro) + ';mag: ' + str(arg[0].mag) + '\n')
-    arg[3].write(str(datetime.datetime.now()) + str(arg[0].estimated_euler) + '\n')
+    arg[2].write(str(datetime.datetime.now()) + '; accel: ' + str(arg[0].accel) + ';gyro: ' + str(arg[0].gyro) + ';mag: ' + str(arg[0].mag) + '\n')
+    arg[3].write(str(datetime.datetime.now()) + '; ' + str(arg[0].estimated_euler) + '\n')
 
 def control_func(arg):
     kp = 0.05
