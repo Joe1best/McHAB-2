@@ -26,6 +26,7 @@ class PersistantVars:
     gyro = []
     mag = []
     mag_field = []
+    gps_initial = []
 
     NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+28]
 
@@ -86,6 +87,7 @@ def readGPS(arg):
                 print 'We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1])
                 arg[3].write(str(datetime.datetime.now())+'; We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1]) + '\n')
                 arg[0].gps_fix=True
+                arg[0].gps_initial = line
 
             #If there's a fix, check boundary conditions and altitude
             if(arg[0].gps_fix):
@@ -115,7 +117,6 @@ def convertGPS(latitude, longitude):
 
 def magField(arg, gps_str):
     #calculate magnetic field vector in inertial frame
-    Re = 6378.1*(10**3)
     g0 = (-29496.5 + 11.4*3)*10**(-9)
     g1 = (-1585.9 + 16.7*3)*10**(-9)
     h1 = (4945.1 - 28.8*3)*10**(-9)
@@ -133,18 +134,36 @@ def magField(arg, gps_str):
     #coelevation
     theta = math.pi/2 - latitude*math.pi/180.0
     phi = longitude*math.pi/180.0
-
-    rb = float(gps_str[9]) + Re
+    latitude = latitude*math.pi/180
+    
+    Rea = 6378137.0
+    e = 0.08181919
+    Ne = Rea/math.sqrt(1-e**2*(math.sin(latitude))**2)
+    
+    rb = float(gps_str[9]) + Ne
 
     br = 2*(Re/rb)**3*(g0*math.cos(theta)+(g1*math.cos(phi)+h1*math.sin(phi))*math.sin(theta))
     btheta = (Re/rb)**3*(g0*math.sin(theta)-(g1*math.cos(phi)+h1*math.sin(phi))*math.cos(theta))
-    bphi = (Re/rb)**3*(g1*math.sin(phi)-h1*math.cos(phi))
+    bphi = (Re/(Ne*(1-e**2)+float(gps_str[9])))**3*(g1*math.sin(phi)-h1*math.cos(phi))
 
     bx = br*math.sin(btheta)*math.cos(bphi)
     by = br*math.sin(btheta)*math.sin(bphi)
     bz = br*math.cos(btheta)
+    
+    lat_initial,long_initial = convertGPS(gps_initial[2],gps_initial[4])
+    lat_initial = lat_initial*math.pi/180
+    long_initial = long_initial*math.pi/180
+    
+    #rotation from ECEF to local NED frame with x - north
+    #y - west and z - up
+    Cne = np.array([[-math.sin(lat_initial)*math.cos(long_initial), -math.sin(lat_initial)*math.sin(long_initial), math.cos(lat_initial)], 
+                    [math.sin(long_initial), -math.cos(long_initial), 0.0], 
+                    [math.cos(lat_initial)*math.cos(long_initial), math.cos(lat_initial)*math.sin(long_initial), math.sin(lat_initial)]]
 
-    arg[0].mag_field = [bx, by, bz]
+    bfield_ecef = numpy.array([[bx],[by],[bz]])
+    bfield_ned = numpy.dot(Cne, bfield_ecef)
+    
+    arg[0].mag_field = bfield_ned
     print arg[0].mag_field
 
 def beeper(arg):
