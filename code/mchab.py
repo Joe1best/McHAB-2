@@ -26,6 +26,8 @@ class PersistantVars:
     gyro = []
     mag = []
     mag_field = []
+    
+    NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+20]
 
     estimated_euler = []
     ang_vel = []
@@ -73,29 +75,34 @@ def readBMP(arg):
     arg[0].pressure = arg[0].bmp.readPressure()
     arg[0].altitude = arg[0].bmp.readAltitude()
     print 'temp: ' + str(arg[0].temp) + ';pressure: ' + str(arg[0].pressure) + ';altitude: ' + str(arg[0].altitude)
+    arg[1].write(str(datetime.datetime.now()) + '; temp: ' + str(arg[0].temp) + ';pressure: ' + str(arg[0].pressure) + ';altitude: ' + str(arg[0].altitude) + '\n')
 
 def readGPS(arg):
-    print 'GPS read: ' + str(datetime.datetime.now())
     #If there's something in the serial buffer, get it
     while(arg[1].inWaiting()>0):
         line = arg[1].readline().rstrip().split(',')
+        arg[1].write(str(datetime.datetime.now()) + str(line) + '\n')
+        
         if(line[0]=='$GPGGA'):
             coord = []
 
             if((line[6]=='1' or line[6]=='2') and arg[0].gps_fix==False):
                 coord = [float(line[2]),float(line[4])]
                 print 'We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1])
+                arg[2].write('We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1]) + '\n')
                 arg[0].gps_fix=True
 
             if(arg[0].gps_fix):
                 coord = [float(line[2]),float(line[4])]
                 print coord
-                if( coord[0] > arg[2][0] or coord[0] < arg[2][1] or coord[1] < arg[2][2] or coord[1] > arg[2][3] ):
+                if( coord[0] > arg[0].NSEW_limits[0] or coord[0] < arg[0].NSEW_limits[1] or coord[1] < arg[0].NSEW_limits[2] or coord[1] > arg[0].NSEW_limits[3] ):
                     print 'Reached the boundary limits'
+                    arg[2].write('Reached the boundary limits\n')
                     arg[0].boundary_reached = True
                 if(float(line[8]) > 152.4):
                     arg[0].mission_start = True
                     print 'Reached 500ft, Mission Start'
+                    arg[2].write('Reached 500ft, Mission Start'\n')
                     arg[0].start_time = time.time()*1000.0
 
                 magField(arg, line)
@@ -148,10 +155,10 @@ def beeper(arg):
         if(not arg[0].beep_high):
             GPIO.output(beeper_pin,GPIO.HIGH)
             arg[0].beep_high = True
-            print 'HIGH'
+            print 'Beep HIGH'
         else:
             GPIO.output(beeper_pin,GPIO.LOW)
-            print 'LOW'
+            print 'Beep LOW'
             arg[0].beep_time = arg[0].beep_time + 1
             if(arg[0].beep_time > 9):
                 arg[0].beep_high = False
@@ -160,9 +167,11 @@ def beeper(arg):
     elif(not arg[0].beep_gps and arg[0].gps_fix):
         if(not arg[0].beep_high):
             GPIO.output(beeper_pin,GPIO.HIGH)
+            print 'Beep HIGH'
             arg[0].beep_high = True
         else:
             GPIO.output(beeper_pin,GPIO.LOW)
+            print 'Beep LOW'
             arg[0].beep_count = arg[0].beep_count + 1
             arg[0].beep_high = False
             if(arg[0].beep_count > 4):
@@ -173,20 +182,24 @@ def fuser(arg):
         if(arg[0].boundary_reached):
             GPIO.output(pin_pin,GPIO.HIGH)
             print 'Fired fuser'
+            arg[1].write('Fired fuser\n'
             arg[0].fuser_count = arg[0].fuser_count + 1
 
         elif(arg[0].mission_start and (time.time()*1000.0-arg[0].start_time > mission_time)):
             GPIO.output(fuser_pin,GPIO.HIGH)
             print 'Fired fuser'
+            arg[1].write('Fired fuser\n'
             arg[0].fuser_count = arg[0].fuser_count + 1
 
         if(arg[0].fuser_count > 5):
             arg[0].fuser_fired = True
             GPIO.output(fuser_pin,GPIO.LOW)
             print 'Turned off fuser'
+            arg[1].write('Turned off fuser\n'
 
 def estimator(arg):
     arg[0].estimated_euler = arg[1].getAttitude()
+    arg[1].write(str(datetime.datetime.now()) + str(arg[0].estimated_euler) + '\n')
 
 def control_func(arg):
     kp = 0.05
@@ -202,9 +215,11 @@ if __name__ == '__main__':
     newpath = './log'
     if not os.path.exists(newpath):
         os.makedirs(newpath)
-    imu_file = open(newpath+"/IMUData.txt","w")
-    bmp_file = open(newpath+"/BMPData.txt","w")
-    gps_file = open(newpath+"/GPSData.txt","w")
+    imu_file = open(newpath+"/IMU.dat","w")
+    att_file = open(newpath+"/att.dat","w")
+    bmp_file = open(newpath+"/BMP.dat","w")
+    gps_file = open(newpath+"/GPS.dat","w")
+    console_file = open(newpath+"/console.dat","w")
 
     #Sensor Initializations
     l3g = L3G.L3G4200D()
@@ -225,25 +240,23 @@ if __name__ == '__main__':
     GPIO.output(fuser_pin,GPIO.LOW)
     GPIO.output(motor_pin,GPIO.LOW)
 
-    #Constants
-    NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+20]
-
     #Sampling Frequencies
     imu_fs = 50.0
     bmp_fs = 2.0
     gps_fs = 1.0
-    estim_fs = 10.0
+    estim_fs = 20.0
+    con_fs = 10.0
 
     #Object container initializations
     persistent = PersistantVars(lsm, l3g, BMP.BMP085())
 
-    imu_task = task.LoopingCall(readIMU,[persistent,imu_file]).start(1.0/imu_fs)
-    #bmp_task = task.LoopingCall(readBMP,[persistent,bmp_file]).start(1.0/bmp_fs)
-    #gps_task = task.LoopingCall(readGPS,[persistent, ser, NSEW_limits, gps_file]).start(1.0/gps_fs)
-    #beeper_task = task.LoopingCall(beeper,[persistent]).start(1.0)
-    #fuser_task = task.LoopingCall(fuser,[persistent]).start(1.0)
-    estimater_task = task.LoopingCall(estimator,[persistent,att]).start(1.0/estim_fs)
-    control_task = task.LoopingCall(control_func,[persistent,con]).start(1.0/5.0)
+    imu_task = task.LoopingCall(readIMU,[persistent, imu_file, console_file]).start(1.0/imu_fs)
+    bmp_task = task.LoopingCall(readBMP,[persistent, bmp_file, console_file]).start(1.0/bmp_fs)
+    gps_task = task.LoopingCall(readGPS,[persistent, ser, gps_file, console_file]).start(1.0/gps_fs)
+    beeper_task = task.LoopingCall(beeper,[persistent, console_file]).start(1.0)
+    fuser_task = task.LoopingCall(fuser,[persistent, console_file]).start(1.0)
+    estimater_task = task.LoopingCall(estimator,[persistent, att, att_file, console_file]).start(1.0/estim_fs)
+    control_task = task.LoopingCall(control_func,[persistent, con, console_file]).start(1.0/con_fs)
 
     reactor.run()
 
