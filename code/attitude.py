@@ -19,7 +19,7 @@ class attitude:
 
     Cbi_hat = np.identity(3)
     g_i = np.array([[0],[0],[-1]])
-    b_d = np.array([[-0.52031361] , [0.56860619] , [0.6371505]])
+    b_d = np.array([[arg.mag_field[0]], [arg.mag_field[1]] , [ar.mag_field[2]]])
     C_d = np.identity(3)
 
     C_em = np.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]])
@@ -63,15 +63,17 @@ class attitude:
         omega_measured = np.dot(self.C_em, omega_measured)
         norm_magne = np.dot(self.C_em, norm_magne)
 
+        '''
         if(self.firstRun):
             self.b_d=np.array([[norm_magne[0][0]],[norm_magne[1][0]],[norm_magne[2][0]]])
             self.g_i=np.array([[norm_accel[0][0]],[norm_accel[1][0]],[norm_accel[2][0]]])
             self.firstRun=False
+        '''
 
         b_b=np.dot(self.Cbi_hat,self.b_d)
         g_b=np.dot(self.Cbi_hat,self.g_i)
 
-        r=-10*(np.dot(self.cross(g_b),norm_accel) + np.dot(self.cross(b_b),norm_magne))
+        r=-5*(np.dot(self.cross(g_b),norm_accel) + 0.25*np.dot(self.cross(b_b),norm_magne))
 
         omega_hat = omega_measured+r
         omega_hat_mag = math.sqrt(omega_hat[0][0]**2+omega_hat[1][0]**2+omega_hat[2][0]**2)
