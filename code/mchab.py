@@ -6,6 +6,7 @@ import datetime
 import os
 import serial
 import math
+import numpy as np
 
 import RPi.GPIO as GPIO
 import Adafruit_MCP4725 as MCP4725
@@ -26,6 +27,7 @@ class PersistantVars:
     gyro = []
     mag = []
     mag_field = []
+    mag_field_exists = False
     gps_initial = []
 
     NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+28]
@@ -75,7 +77,7 @@ def readGPS(arg):
     while(arg[1].inWaiting()>0):
         line = arg[1].readline().rstrip().split(',')
         arg[2].write(str(datetime.datetime.now()) + '; ' + str(line) + '\n')
-        print line
+        #print line
 
         #Only look at the GPGGA sentence
         if(line[0]=='$GPGGA'):
@@ -104,7 +106,7 @@ def readGPS(arg):
                     arg[3].write(str(datetime.datetime.now()) + '; Reached 500ft, Mission Start\n')
                     arg[0].start_time = time.time()*1000.0
 
-                    magField(arg, line)
+                magField(arg, line)
 
 
 def convertGPS(latitude, longitude):
@@ -135,36 +137,37 @@ def magField(arg, gps_str):
     theta = math.pi/2 - latitude*math.pi/180.0
     phi = longitude*math.pi/180.0
     latitude = latitude*math.pi/180
-    
+
     Rea = 6378137.0
     e = 0.08181919
     Ne = Rea/math.sqrt(1-e**2*(math.sin(latitude))**2)
-    
+
     rb = float(gps_str[9]) + Ne
 
-    br = 2*(Re/rb)**3*(g0*math.cos(theta)+(g1*math.cos(phi)+h1*math.sin(phi))*math.sin(theta))
-    btheta = (Re/rb)**3*(g0*math.sin(theta)-(g1*math.cos(phi)+h1*math.sin(phi))*math.cos(theta))
-    bphi = (Re/(Ne*(1-e**2)+float(gps_str[9])))**3*(g1*math.sin(phi)-h1*math.cos(phi))
+    br = 2*(Rea/rb)**3*(g0*math.cos(theta)+(g1*math.cos(phi)+h1*math.sin(phi))*math.sin(theta))
+    btheta = (Rea/rb)**3*(g0*math.sin(theta)-(g1*math.cos(phi)+h1*math.sin(phi))*math.cos(theta))
+    bphi = (Rea/(Ne*(1-e**2)+float(gps_str[9])))**3*(g1*math.sin(phi)-h1*math.cos(phi))
 
     bx = br*math.sin(btheta)*math.cos(bphi)
     by = br*math.sin(btheta)*math.sin(bphi)
     bz = br*math.cos(btheta)
-    
-    lat_initial,long_initial = convertGPS(gps_initial[2],gps_initial[4])
+
+    lat_initial,long_initial = convertGPS(arg[0].gps_initial[2], arg[0].gps_initial[4])
     lat_initial = lat_initial*math.pi/180
     long_initial = long_initial*math.pi/180
-    
+
     #rotation from ECEF to local NED frame with x - north
     #y - west and z - up
-    Cne = np.array([[-math.sin(lat_initial)*math.cos(long_initial), -math.sin(lat_initial)*math.sin(long_initial), math.cos(lat_initial)], 
-                    [math.sin(long_initial), -math.cos(long_initial), 0.0], 
-                    [math.cos(lat_initial)*math.cos(long_initial), math.cos(lat_initial)*math.sin(long_initial), math.sin(lat_initial)]]
+    Cne = np.array([[-math.sin(lat_initial)*math.cos(long_initial), -math.sin(lat_initial)*math.sin(long_initial), math.cos(lat_initial)],
+                    [math.sin(long_initial), -math.cos(long_initial), 0.0],
+                    [math.cos(lat_initial)*math.cos(long_initial), math.cos(lat_initial)*math.sin(long_initial), math.sin(lat_initial)]])
 
-    bfield_ecef = numpy.array([[bx],[by],[bz]])
-    bfield_ned = numpy.dot(Cne, bfield_ecef)
+    bfield_ecef = np.array([[bx],[by],[bz]])
+    bfield_ned = np.dot(Cne, bfield_ecef)
     bfield_ned = [bfield_ned[0], bfield_ned[1], bfield_ned[2]]
-    
+
     arg[0].mag_field = bfield_ned
+    arg[0].mag_field_exists = True
     print arg[0].mag_field
 
 def beeper(arg):
@@ -215,15 +218,16 @@ def fuser(arg):
             arg[1].write('Turned off fuser\n')
 
 def estimator(arg):
-    arg[0].accel = arg[0].lsm.readRawAccel()
-    arg[0].mag = arg[0].lsm.readRawMag()
-    arg[0].gyro = arg[0].l3g.readRawGyro()
-    arg[0].ang_vel = convert_gyro(arg[0].gyro)
+    if(arg[0].mag_field_exists):
+        arg[0].accel = arg[0].lsm.readRawAccel()
+        arg[0].mag = arg[0].lsm.readRawMag()
+        arg[0].gyro = arg[0].l3g.readRawGyro()
+        arg[0].ang_vel = convert_gyro(arg[0].gyro)
 
-    arg[0].estimated_euler = arg[1].getAttitude(arg[0])
+        arg[0].estimated_euler = arg[1].getAttitude(arg[0])
 
-    arg[2].write(str(datetime.datetime.now()) + '; accel: ' + str(arg[0].accel) + ';gyro: ' + str(arg[0].gyro) + ';mag: ' + str(arg[0].mag) + '\n')
-    arg[3].write(str(datetime.datetime.now()) + '; ' + str(arg[0].estimated_euler) + '\n')
+        arg[2].write(str(datetime.datetime.now()) + '; accel: ' + str(arg[0].accel) + ';gyro: ' + str(arg[0].gyro) + ';mag: ' + str(arg[0].mag) + '\n')
+        arg[3].write(str(datetime.datetime.now()) + '; ' + str(arg[0].estimated_euler) + '\n')
 
 def control_func(arg):
     kp = 0.05
@@ -275,10 +279,10 @@ if __name__ == '__main__':
     persistent = PersistantVars(lsm, l3g, BMP.BMP085())
 
     #Task list
-    bmp_task = task.LoopingCall(readBMP,[persistent, bmp_file, console_file]).start(1.0/bmp_fs)
+    #bmp_task = task.LoopingCall(readBMP,[persistent, bmp_file, console_file]).start(1.0/bmp_fs)
     gps_task = task.LoopingCall(readGPS,[persistent, ser, gps_file, console_file]).start(1.0/gps_fs)
-    beeper_task = task.LoopingCall(beeper,[persistent, console_file]).start(1.0)
-    fuser_task = task.LoopingCall(fuser,[persistent, console_file]).start(1.0)
+    #beeper_task = task.LoopingCall(beeper,[persistent, console_file]).start(1.0)
+    #fuser_task = task.LoopingCall(fuser,[persistent, console_file]).start(1.0)
     estimater_task = task.LoopingCall(estimator,[persistent, att, imu_file, att_file, console_file]).start(1.0/estim_fs)
     #control_task = task.LoopingCall(control_func,[persistent, con, console_file]).start(1.0/con_fs)
 

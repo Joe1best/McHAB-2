@@ -19,7 +19,7 @@ class attitude:
 
     Cbi_hat = np.identity(3)
     g_i = np.array([[0],[0],[-1]])
-    b_d = np.array([[arg.mag_field[0]], [arg.mag_field[1]] , [ar.mag_field[2]]])
+    b_d = np.array([[0], [0], [0]])
     C_d = np.identity(3)
 
     C_em = np.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]])
@@ -53,6 +53,8 @@ class attitude:
         return norm_accel, omega_measured, norm_magne
 
     def getAttitude(self,arg):
+        b_d = np.array([[arg.mag_field[0]], [arg.mag_field[1]] , [arg.mag_field[2]]])
+
         ax,ay,az = arg.accel
         gx,gy,gz = arg.gyro
         mx,my,mz = arg.mag
