@@ -13,7 +13,7 @@ import LSM303DLM as LSM
 import L3G4200D as L3G
 
 class attitude:
-    F_sample = 40
+    F_sample = 20
     T_sample = 1.0/F_sample
     GYRO_FS = 250 #16 bit register
 
@@ -28,9 +28,6 @@ class attitude:
 
     def __init__(self,lsm,l3g):
         self.firstRun = True
-
-        self.lsm = lsm
-        self.l3g = l3g
 
     def normalize(self,array):
         temp=math.sqrt(array[0][0]**2+array[1][0]**2+array[2][0]**2)
@@ -55,10 +52,10 @@ class attitude:
 
         return norm_accel, omega_measured, norm_magne
 
-    def getAttitude(self):
-        ax,ay,az = self.lsm.readRawAccel()
-        gx,gy,gz = self.l3g.readRawGyro()
-        mx,my,mz = self.lsm.readRawMag()
+    def getAttitude(arg):
+        ax,ay,az = arg[0].accel
+        gx,gy,gz = arg[0].gyro
+        mx,my,mz = arg[0].mag
         line=[ax,ay,az,gx,gy,gz,mx,my,mz]
         norm_accel,omega_measured,norm_magne = self.parseData(line)
 

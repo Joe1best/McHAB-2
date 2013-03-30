@@ -60,20 +60,12 @@ def convert_gyro(array):
     conv = lambda x: (float(x)/(2**15))*250
     return [conv(array[0]),conv(array[1]),conv(array[2])]
 
-def readIMU(arg):
-    #print 'IMU Read: ' + str(datetime.datetime.now()),
-    arg[0].accel = arg[0].lsm.readRawAccel()
-    arg[0].mag = arg[0].lsm.readRawMag()
-    arg[0].gyro = arg[0].l3g.readRawGyro()
-    arg[0].ang_vel = convert_gyro(arg[0].gyro)
-
-    #print 'accel: ' + str(arg[0].accel) + ';gyro: ' + str(arg[0].gyro) + ';mag: ' + str(arg[0].mag)
-
 def readBMP(arg):
     #print 'BMP read: ' + str(datetime.datetime.now()),
     arg[0].temp = arg[0].bmp.readTemperature()
     arg[0].pressure = arg[0].bmp.readPressure()
     arg[0].altitude = arg[0].bmp.readAltitude()
+    
     print 'temp: ' + str(arg[0].temp) + ';pressure: ' + str(arg[0].pressure) + ';altitude: ' + str(arg[0].altitude)
     arg[1].write(str(datetime.datetime.now()) + '; temp: ' + str(arg[0].temp) + ';pressure: ' + str(arg[0].pressure) + ';altitude: ' + str(arg[0].altitude) + '\n')
 
@@ -83,29 +75,33 @@ def readGPS(arg):
         line = arg[1].readline().rstrip().split(',')
         arg[1].write(str(datetime.datetime.now()) + str(line) + '\n')
         
+        #Only look at the GPGGA sentence
         if(line[0]=='$GPGGA'):
             coord = []
-
+            
+            #Check if there's a fix
             if((line[6]=='1' or line[6]=='2') and arg[0].gps_fix==False):
                 coord = [float(line[2]),float(line[4])]
                 print 'We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1])
                 arg[2].write('We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1]) + '\n')
                 arg[0].gps_fix=True
-
+            
+            #If there's a fix, check boundary conditions and altitude
             if(arg[0].gps_fix):
                 coord = [float(line[2]),float(line[4])]
-                print coord
+                
                 if( coord[0] > arg[0].NSEW_limits[0] or coord[0] < arg[0].NSEW_limits[1] or coord[1] < arg[0].NSEW_limits[2] or coord[1] > arg[0].NSEW_limits[3] ):
                     print 'Reached the boundary limits'
                     arg[2].write('Reached the boundary limits\n')
                     arg[0].boundary_reached = True
+                    
                 if(float(line[8]) > 152.4):
                     arg[0].mission_start = True
                     print 'Reached 500ft, Mission Start'
                     arg[2].write('Reached 500ft, Mission Start'\n')
                     arg[0].start_time = time.time()*1000.0
 
-                magField(arg, line)
+                #magField(arg, line)
 
 
 def convertGPS(latitude, longitude):
@@ -198,8 +194,15 @@ def fuser(arg):
             arg[1].write('Turned off fuser\n'
 
 def estimator(arg):
-    arg[0].estimated_euler = arg[1].getAttitude()
-    arg[1].write(str(datetime.datetime.now()) + str(arg[0].estimated_euler) + '\n')
+    arg[0].accel = arg[0].lsm.readRawAccel()
+    arg[0].mag = arg[0].lsm.readRawMag()
+    arg[0].gyro = arg[0].l3g.readRawGyro()
+    arg[0].ang_vel = convert_gyro(arg[0].gyro)
+   
+    arg[0].estimated_euler = arg[1].getAttitude(arg[0])
+    
+    arg[2].write(str(datetime.datetime.now()) + 'accel: ' + str(arg[0].accel) + ';gyro: ' + str(arg[0].gyro) + ';mag: ' + str(arg[0].mag) + '\n')
+    arg[3].write(str(datetime.datetime.now()) + str(arg[0].estimated_euler) + '\n')
 
 def control_func(arg):
     kp = 0.05
@@ -227,10 +230,11 @@ if __name__ == '__main__':
     lsm = LSM.LSM303DLM()
     lsm.enableDefault()
     ser = serial.Serial('/dev/ttyAMA0', 4800, timeout=0.1)
-    att = attitude.attitude(lsm,l3g)
+    att = attitude.attitude()
     dac = MCP4725.MCP4725(0x60)
     con = control.control(dac)
 
+    #GPIO Pin Initializations
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(beeper_pin,GPIO.OUT)
     GPIO.setup(fuser_pin,GPIO.OUT)
@@ -241,7 +245,6 @@ if __name__ == '__main__':
     GPIO.output(motor_pin,GPIO.LOW)
 
     #Sampling Frequencies
-    imu_fs = 50.0
     bmp_fs = 2.0
     gps_fs = 1.0
     estim_fs = 20.0
@@ -250,13 +253,13 @@ if __name__ == '__main__':
     #Object container initializations
     persistent = PersistantVars(lsm, l3g, BMP.BMP085())
 
-    imu_task = task.LoopingCall(readIMU,[persistent, imu_file, console_file]).start(1.0/imu_fs)
+    #Task list
     bmp_task = task.LoopingCall(readBMP,[persistent, bmp_file, console_file]).start(1.0/bmp_fs)
     gps_task = task.LoopingCall(readGPS,[persistent, ser, gps_file, console_file]).start(1.0/gps_fs)
     beeper_task = task.LoopingCall(beeper,[persistent, console_file]).start(1.0)
     fuser_task = task.LoopingCall(fuser,[persistent, console_file]).start(1.0)
-    estimater_task = task.LoopingCall(estimator,[persistent, att, att_file, console_file]).start(1.0/estim_fs)
-    control_task = task.LoopingCall(control_func,[persistent, con, console_file]).start(1.0/con_fs)
+    estimater_task = task.LoopingCall(estimator,[persistent, att, imu_file, att_file, console_file]).start(1.0/estim_fs)
+    #control_task = task.LoopingCall(control_func,[persistent, con, console_file]).start(1.0/con_fs)
 
     reactor.run()
 
