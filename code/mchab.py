@@ -104,7 +104,7 @@ def readGPS(arg):
                     arg[3].write(str(datetime.datetime.now()) + '; Reached 500ft, Mission Start\n')
                     arg[0].start_time = time.time()*1000.0
 
-                #magField(arg, line)
+                    magField(arg, line)
 
 
 def convertGPS(latitude, longitude):
