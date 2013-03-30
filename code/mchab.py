@@ -162,6 +162,7 @@ def magField(arg, gps_str):
 
     bfield_ecef = numpy.array([[bx],[by],[bz]])
     bfield_ned = numpy.dot(Cne, bfield_ecef)
+    bfield_ned = [bfield_ned[0], bfield_ned[1], bfield_ned[2]]
     
     arg[0].mag_field = bfield_ned
     print arg[0].mag_field
