@@ -37,13 +37,15 @@ class PersistantVars:
     cbi = np.array([[0,0,0],[0,0,0],[0,0,0]])
     ang_vel = []
     rpm = 0
-    spin_count = 0
+    spin_count = 1
 
     alt = 0
     pressure = 0
     temp = 0
 
     gps_fix = False
+    lost_fix = False
+    lost_fix_time = 0
     boundary_reached = False
     fuser_count = 0
     fuser_fired = False
@@ -53,7 +55,7 @@ class PersistantVars:
     beep_gps = False
     beep_time = 0
 
-    mission_start = False
+    mission_start = True
     start_time = time.time()*1000.0
     mission_finished = False
 
@@ -83,7 +85,7 @@ def readGPS(arg):
         #print line
 
         #Only look at the GPGGA sentence
-        if(line[0]=='$GPGGA'):
+        if(line[0]=='$GPGGA' and len(line) == 15):
             coord = []
 
             #Check if there's a fix
@@ -92,7 +94,14 @@ def readGPS(arg):
                 print 'We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1])
                 arg[3].write(str(datetime.datetime.now())+'; We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1]) + '\n')
                 arg[0].gps_fix=True
+                arg[0].lost_fix=False
                 arg[0].gps_initial = line
+
+            if(line[6]=='0' and arg[0].gps_fix==True):
+                print 'lost fix'
+                arg[0].gps_fix=False
+                arg[0].lost_fix=True
+                arg[0].lost_fix_time = time.time()*1000.0
 
             #If there's a fix, check boundary conditions and altitude
             if(arg[0].gps_fix):
@@ -155,7 +164,7 @@ def magField(arg, gps_str, file):
 
     arg[0].mag_field = [bx,by,bz]
     arg[0].mag_field_exists = True
-    file.write(str(datetime.datetime.now()) + '; ' + arg[0].mag_field)
+    file.write(str(datetime.datetime.now()) + '; ' + str(arg[0].mag_field)+'\n')
 
 def beeper(arg):
     if(not arg[0].gps_fix):
@@ -181,24 +190,43 @@ def beeper(arg):
             print 'Beep LOW'
             arg[0].beep_count = arg[0].beep_count + 1
             arg[0].beep_high = False
-            if(arg[0].beep_count > 4):
+            if(arg[0].beep_count > 2):
                 arg[0].beep_gps = True
+
+    elif(arg[0].mission_finished):
+        if(arg[0].beep_time<2):
+            GPIO.output(beeper_pin,GPIO.HIGH)
+        else:
+            GPIO.output(beeper_pin,GPIO.LOW)
+            print 'Beep LOW'
+            arg[0].beep_time = arg[0].beep_time + 1
+            if(arg[0].beep_time > 119):
+                arg[0].beep_time = 0
 
 def fuser(arg):
     if(not arg[0].fuser_fired):
         if(arg[0].boundary_reached):
             GPIO.output(fuser_pin,GPIO.HIGH)
-            print 'Fired fuser'
+            print 'Fired fuser, boundary'
+            arg[0].mission_finished = True
             arg[1].write(str(datetime.datetime.now())+'; Fired fuser, over boundary\n')
             arg[0].fuser_count = arg[0].fuser_count + 1
 
         elif(arg[0].mission_start and (time.time()*1000.0-arg[0].start_time > mission_time)):
             GPIO.output(fuser_pin,GPIO.HIGH)
             print 'Fired fuser, overtime'
+            arg[0].mission_finished = True
             arg[1].write(str(datetime.datetime.now())+'; Fired fuser, overtime\n')
             arg[0].fuser_count = arg[0].fuser_count + 1
 
-        if(arg[0].fuser_count > 5):
+        elif(arg[0].lost_fix and (time.time()*1000.0-arg[0].lost_fix_time > 5*60*1000.0)):
+            GPIO.output(fuser_pin,GPIO.HIGH)
+            print 'Fired fuser, lost fix for more than 5 mins'
+            arg[0].mission_finished = True
+            arg[1].write(str(datetime.datetime.now())+'; Fired fuser, lost fix for more than 5 mins')
+            arg[0].fuser_count = arg[0].fuser_count + 1
+
+        if(arg[0].fuser_count > 10):
             arg[0].fuser_fired = True
             GPIO.output(fuser_pin,GPIO.LOW)
             print 'Turned off fuser'
@@ -227,25 +255,30 @@ def control_func(arg):
     print arg[0].rpm
     '''
     now = time.time()*1000.0
-    delay = 10 #minutes
-    count = now - (arg[0].start_time + arg[0].spin_count * (delay*60*1000.0))
-    if(arg[0].mission_start and count > 600000):
-        if(count > 605000 and count < 610000):
+    delay = 2 #minutes
+    count = now + arg[0].spin_count * (delay*60*1000.0) - arg[0].start_time
+    print count
+    if(arg[0].mission_start and count > delay*60*1000.0):
+        print count
+        if(count > delay*60*1000.0  and count < delay*60*1000.0 + 5000):
             arg[1].go(2.0)
-            arg[2].write(str(datetime.datetime.now())+'; went forward')
+            arg[2].write(str(datetime.datetime.now())+'; went forward\n')
+            print 'forward'
 
-        elif( count > 61000 and count < 615000 ):
+        elif( count > delay*60*1000.0 + 5000 and count < delay*60*1000.0 + 10000 ):
             arg[1].go(-2.0)
-            arg[2].write(str(datetime.datetime.now())+'; went backward')
+            arg[2].write(str(datetime.datetime.now())+'; went backward\n')
+            print 'back'
         else:
             arg[1].go(0.0)
-            arg[2].write(str(datetime.datetime.now())+'; stop')
-            arg[0].spin_count = arg[0].spin_count + 1
+            arg[2].write(str(datetime.datetime.now())+'; stop\n')
+            print 'stop'
+            arg[0].spin_count = arg[0].spin_count - 1
 
 
 if __name__ == '__main__':
     #Create log files
-    newpath = './log'
+    newpath = '/home/pi/McHAB/code/log'
     if not os.path.exists(newpath):
         os.makedirs(newpath)
     imu_file = open(newpath+"/IMU.dat","w")
