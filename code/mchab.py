@@ -33,8 +33,10 @@ class PersistantVars:
     NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+28]
 
     estimated_euler = []
+    cbi = np.array([0,0,0],[0,0,0],[0,0,0])
     ang_vel = []
     rpm = 0
+    spin_count = 0
 
     alt = 0
     pressure = 0
@@ -224,12 +226,13 @@ def estimator(arg):
         arg[0].gyro = arg[0].l3g.readRawGyro()
         arg[0].ang_vel = convert_gyro(arg[0].gyro)
 
-        arg[0].estimated_euler = arg[1].getAttitude(arg[0])
+        arg[0].estimated_euler, arg[0].cbi = arg[1].getAttitude(arg[0])
 
         arg[2].write(str(datetime.datetime.now()) + '; accel: ' + str(arg[0].accel) + ';gyro: ' + str(arg[0].gyro) + ';mag: ' + str(arg[0].mag) + '\n')
-        arg[3].write(str(datetime.datetime.now()) + '; ' + str(arg[0].estimated_euler) + '\n')
+        arg[3].write(str(datetime.datetime.now()) + '; ' + str(arg[0].estimated_euler) + 'rot: ' + ','.join([str(x).rstrip() for x in arg[0].cbi]) + '\n')
 
 def control_func(arg):
+    '''
     kp = 0.05
     kd = 0.05
     tau = -kp*arg[0].estimated_euler[0]*math.pi/180.0 - kd*arg[0].ang_vel[2]*math.pi/180.0
@@ -237,6 +240,23 @@ def control_func(arg):
     f_s = 10.0
     arg[0].rpm = arg[0].rpm + 1.0/f_s*tau/I_motor
     print arg[0].rpm
+    '''
+    now = time.time()*1000.0
+    delay = 10 #minutes
+    count = now - (arg[0].start_time + arg[0].spin_count * (delay*60*1000.0))
+    if(arg[0].mission_start and count > 600000):
+        if(count > 605000 and count < 610000):
+            arg[1].go(2.0)
+            arg[2].write(str(datetime.datetime.now())+'; went forward')
+
+        else if( count > 61000 and count < 615000 ):
+            arg[1].go(-2.0)
+            arg[2].write(str(datetime.datetime.now())+'; went backward')
+        else:
+            arg[1].go(0.0)
+            arg[2].write(str(datetime.datetime.now())+'; stop')
+            arg[0].spin_count = arg[0].spin_count + 1
+
 
 if __name__ == '__main__':
     #Create log files
@@ -247,6 +267,7 @@ if __name__ == '__main__':
     att_file = open(newpath+"/att.dat","w")
     bmp_file = open(newpath+"/BMP.dat","w")
     gps_file = open(newpath+"/GPS.dat","w")
+    cont_file = open(netpath+"/cont.dat","w")
     console_file = open(newpath+"/console.dat","w")
 
     #Sensor Initializations
@@ -273,18 +294,18 @@ if __name__ == '__main__':
     bmp_fs = 2.0
     gps_fs = 1.0
     estim_fs = 20.0
-    con_fs = 10.0
+    con_fs = 5.0
 
     #Object container initializations
     persistent = PersistantVars(lsm, l3g, BMP.BMP085())
 
     #Task list
-    #bmp_task = task.LoopingCall(readBMP,[persistent, bmp_file, console_file]).start(1.0/bmp_fs)
+    bmp_task = task.LoopingCall(readBMP,[persistent, bmp_file, console_file]).start(1.0/bmp_fs)
     gps_task = task.LoopingCall(readGPS,[persistent, ser, gps_file, console_file]).start(1.0/gps_fs)
-    #beeper_task = task.LoopingCall(beeper,[persistent, console_file]).start(1.0)
-    #fuser_task = task.LoopingCall(fuser,[persistent, console_file]).start(1.0)
+    beeper_task = task.LoopingCall(beeper,[persistent, console_file]).start(1.0)
+    fuser_task = task.LoopingCall(fuser,[persistent, console_file]).start(1.0)
     estimater_task = task.LoopingCall(estimator,[persistent, att, imu_file, att_file, console_file]).start(1.0/estim_fs)
-    #control_task = task.LoopingCall(control_func,[persistent, con, console_file]).start(1.0/con_fs)
+    control_task = task.LoopingCall(control_func,[persistent, con, cont_file, console_file]).start(1.0/con_fs)
 
     reactor.run()
 

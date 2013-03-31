@@ -88,4 +88,4 @@ class attitude:
         euler=tf.euler_from_matrix(self.Cbi_hat.T, axes='szyx')
         euler=tuple([x*180.0/math.pi for x in euler])
 
-        return euler
+        return euler, self.Cbi_hat
