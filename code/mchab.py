@@ -131,7 +131,7 @@ def magField(arg, gps_str):
     latitude, longitude = convertGPS(lat_str, long_str)
 
     if gps_str[5] == 'W':
-        longitude = 360 - longitude
+        longitude = -longitude
     if gps_str[3] == 'S':
         latitude = -latitude
 
@@ -140,35 +140,19 @@ def magField(arg, gps_str):
     phi = longitude*math.pi/180.0
     latitude = latitude*math.pi/180
 
-    Rea = 6378137.0
-    e = 0.08181919
-    Ne = Rea/math.sqrt(1-e**2*(math.sin(latitude))**2)
+    Re = 6371.2*10**(3)
 
-    rb = float(gps_str[9]) + Ne
+    rb = float(gps_str[9]) + Re
 
-    br = 2*(Rea/rb)**3*(g0*math.cos(theta)+(g1*math.cos(phi)+h1*math.sin(phi))*math.sin(theta))
-    btheta = (Rea/rb)**3*(g0*math.sin(theta)-(g1*math.cos(phi)+h1*math.sin(phi))*math.cos(theta))
-    bphi = (Rea/(Ne*(1-e**2)+float(gps_str[9])))**3*(g1*math.sin(phi)-h1*math.cos(phi))
+    br = 2*(Re/rb)**3*(g0*math.cos(theta)+(g1*math.cos(phi)+h1*math.sin(phi))*math.sin(theta))
+    btheta = (Re/rb)**3*(g0*math.sin(theta)-(g1*math.cos(phi)+h1*math.sin(phi))*math.cos(theta))
+    bphi = (Re/(rb)**3*(g1*math.sin(phi)-h1*math.cos(phi))
 
-    bx = br*math.sin(btheta)*math.cos(bphi)
-    by = br*math.sin(btheta)*math.sin(bphi)
-    bz = br*math.cos(btheta)
+    bx = -btheta
+    by = -bphi
+    bz = br
 
-    lat_initial,long_initial = convertGPS(arg[0].gps_initial[2], arg[0].gps_initial[4])
-    lat_initial = lat_initial*math.pi/180
-    long_initial = long_initial*math.pi/180
-
-    #rotation from ECEF to local NED frame with x - north
-    #y - west and z - up
-    Cne = np.array([[-math.sin(lat_initial)*math.cos(long_initial), -math.sin(lat_initial)*math.sin(long_initial), math.cos(lat_initial)],
-                    [math.sin(long_initial), -math.cos(long_initial), 0.0],
-                    [math.cos(lat_initial)*math.cos(long_initial), math.cos(lat_initial)*math.sin(long_initial), math.sin(lat_initial)]])
-
-    bfield_ecef = np.array([[bx],[by],[bz]])
-    bfield_ned = np.dot(Cne, bfield_ecef)
-    bfield_ned = [bfield_ned[0], bfield_ned[1], bfield_ned[2]]
-
-    arg[0].mag_field = bfield_ned
+    arg[0].mag_field = [bx,by,bz]
     arg[0].mag_field_exists = True
     print arg[0].mag_field
 
