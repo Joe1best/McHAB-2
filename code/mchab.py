@@ -30,8 +30,8 @@ class PersistantVars:
     mag_field_exists = False
     gps_initial = []
 
-    #NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+28]
-    NSEW_limits = [45*100+40, 45*100+39, 72*100+32, 73*100+28]
+    NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+28]
+    #NSEW_limits = [45*100+40, 45*100+39, 72*100+32, 73*100+28]
 
     estimated_euler = []
     cbi = np.array([[0,0,0],[0,0,0],[0,0,0]])
