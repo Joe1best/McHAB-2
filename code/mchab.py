@@ -30,10 +30,11 @@ class PersistantVars:
     mag_field_exists = False
     gps_initial = []
 
-    NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+28]
+    #NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+28]
+    NSEW_limits = [45*100+40, 45*100+39, 72*100+32, 73*100+28]
 
     estimated_euler = []
-    cbi = np.array([0,0,0],[0,0,0],[0,0,0])
+    cbi = np.array([[0,0,0],[0,0,0],[0,0,0]])
     ang_vel = []
     rpm = 0
     spin_count = 0
@@ -146,7 +147,7 @@ def magField(arg, gps_str, file):
 
     br = 2*(Re/rb)**3*(g0*math.cos(theta)+(g1*math.cos(phi)+h1*math.sin(phi))*math.sin(theta))
     btheta = (Re/rb)**3*(g0*math.sin(theta)-(g1*math.cos(phi)+h1*math.sin(phi))*math.cos(theta))
-    bphi = (Re/(rb)**3*(g1*math.sin(phi)-h1*math.cos(phi))
+    bphi = (Re/(rb)**3*(g1*math.sin(phi)-h1*math.cos(phi)))
 
     bx = -btheta
     by = -bphi
@@ -233,7 +234,7 @@ def control_func(arg):
             arg[1].go(2.0)
             arg[2].write(str(datetime.datetime.now())+'; went forward')
 
-        else if( count > 61000 and count < 615000 ):
+        elif( count > 61000 and count < 615000 ):
             arg[1].go(-2.0)
             arg[2].write(str(datetime.datetime.now())+'; went backward')
         else:
@@ -249,10 +250,10 @@ if __name__ == '__main__':
         os.makedirs(newpath)
     imu_file = open(newpath+"/IMU.dat","w")
     att_file = open(newpath+"/att.dat","w")
-	mag_file = open(newpath+"/mag.dat","w")
+    mag_file = open(newpath+"/mag.dat","w")
     bmp_file = open(newpath+"/BMP.dat","w")
     gps_file = open(newpath+"/GPS.dat","w")
-    cont_file = open(netpath+"/cont.dat","w")
+    cont_file = open(newpath+"/cont.dat","w")
     console_file = open(newpath+"/console.dat","w")
 
     #Sensor Initializations
