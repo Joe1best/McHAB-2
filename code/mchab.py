@@ -108,7 +108,7 @@ def readGPS(arg):
                     arg[3].write(str(datetime.datetime.now()) + '; Reached 500ft, Mission Start\n')
                     arg[0].start_time = time.time()*1000.0
 
-                magField(arg, line)
+                magField(arg, line, arg[4])
 
 
 def convertGPS(latitude, longitude):
@@ -119,7 +119,7 @@ def convertGPS(latitude, longitude):
 
     return latitude, longitude
 
-def magField(arg, gps_str):
+def magField(arg, gps_str, file):
     #calculate magnetic field vector in inertial frame
     g0 = (-29496.5 + 11.4*3)*10**(-9)
     g1 = (-1585.9 + 16.7*3)*10**(-9)
@@ -154,7 +154,7 @@ def magField(arg, gps_str):
 
     arg[0].mag_field = [bx,by,bz]
     arg[0].mag_field_exists = True
-    print arg[0].mag_field
+    file.write(str(datetime.datetime.now()) + '; ' + arg[0].mag_field)
 
 def beeper(arg):
     if(not arg[0].gps_fix):
@@ -188,20 +188,20 @@ def fuser(arg):
         if(arg[0].boundary_reached):
             GPIO.output(fuser_pin,GPIO.HIGH)
             print 'Fired fuser'
-            arg[1].write('Fired fuser, over boundary\n')
+            arg[1].write(str(datetime.datetime.now())+'; Fired fuser, over boundary\n')
             arg[0].fuser_count = arg[0].fuser_count + 1
 
         elif(arg[0].mission_start and (time.time()*1000.0-arg[0].start_time > mission_time)):
             GPIO.output(fuser_pin,GPIO.HIGH)
             print 'Fired fuser, overtime'
-            arg[1].write('Fired fuser, overtime\n')
+            arg[1].write(str(datetime.datetime.now())+'; Fired fuser, overtime\n')
             arg[0].fuser_count = arg[0].fuser_count + 1
 
         if(arg[0].fuser_count > 5):
             arg[0].fuser_fired = True
             GPIO.output(fuser_pin,GPIO.LOW)
             print 'Turned off fuser'
-            arg[1].write('Turned off fuser\n')
+            arg[1].write(str(datetime.datetime.now())+'; Turned off fuser\n')
 
 def estimator(arg):
     if(arg[0].mag_field_exists):
@@ -249,6 +249,7 @@ if __name__ == '__main__':
         os.makedirs(newpath)
     imu_file = open(newpath+"/IMU.dat","w")
     att_file = open(newpath+"/att.dat","w")
+	mag_file = open(newpath+"/mag.dat","w")
     bmp_file = open(newpath+"/BMP.dat","w")
     gps_file = open(newpath+"/GPS.dat","w")
     cont_file = open(netpath+"/cont.dat","w")
@@ -285,7 +286,7 @@ if __name__ == '__main__':
 
     #Task list
     bmp_task = task.LoopingCall(readBMP,[persistent, bmp_file, console_file]).start(1.0/bmp_fs)
-    gps_task = task.LoopingCall(readGPS,[persistent, ser, gps_file, console_file]).start(1.0/gps_fs)
+    gps_task = task.LoopingCall(readGPS,[persistent, ser, gps_file, console_file, mag_file]).start(1.0/gps_fs)
     beeper_task = task.LoopingCall(beeper,[persistent, console_file]).start(1.0)
     fuser_task = task.LoopingCall(fuser,[persistent, console_file]).start(1.0)
     estimater_task = task.LoopingCall(estimator,[persistent, att, imu_file, att_file, console_file]).start(1.0/estim_fs)
