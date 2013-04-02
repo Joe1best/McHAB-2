@@ -7,6 +7,7 @@ import os
 import serial
 import math
 import numpy as np
+import sys
 
 import RPi.GPIO as GPIO
 import Adafruit_MCP4725 as MCP4725
@@ -30,7 +31,7 @@ class PersistantVars:
     mag_field_exists = False
     gps_initial = []
 
-    NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 73*100+28]
+    NSEW_limits = [46*100+10, 45*100+25, 72*100+20, 74*100+28]
     #NSEW_limits = [45*100+40, 45*100+39, 72*100+32, 73*100+28]
 
     estimated_euler = []
@@ -55,7 +56,7 @@ class PersistantVars:
     beep_gps = False
     beep_time = 0
 
-    mission_start = True
+    mission_start = False
     start_time = time.time()*1000.0
     mission_finished = False
 
@@ -74,51 +75,57 @@ def readBMP(arg):
     arg[0].pressure = arg[0].bmp.readPressure()
     arg[0].altitude = arg[0].bmp.readAltitude()
 
-    print 'temp: ' + str(arg[0].temp) + ';pressure: ' + str(arg[0].pressure) + ';altitude: ' + str(arg[0].altitude)
-    arg[1].write(str(datetime.datetime.now()) + '; temp: ' + str(arg[0].temp) + ';pressure: ' + str(arg[0].pressure) + ';altitude: ' + str(arg[0].altitude) + '\n')
+    if(arg[0].altitude > 152.4 and not arg[0].mission_start):
+        arg[0].mission_start = True
+        print 'Reached 500ft, Mission Start: ' + str(arg[0].altitude)
+        arg[3].write(str(datetime.datetime.now()) + ';Reached 500ft, Mission Start: ' + arg[0].altitude + '\n')
+        arg[0].start_time = time.time()*1000.0
+
+    print 'temp:' + str(arg[0].temp) + ';pressure:' + str(arg[0].pressure) + ';altitude:' + str(arg[0].altitude)
+    arg[1].write(str(datetime.datetime.now()) + ';temp:' + str(arg[0].temp) + ';pressure:' + str(arg[0].pressure) + ';altitude:' + str(arg[0].altitude) + '\n')
 
 def readGPS(arg):
-    #If there's something in the serial buffer, get it
-    while(arg[1].inWaiting()>0):
-        line = arg[1].readline().rstrip().split(',')
-        arg[2].write(str(datetime.datetime.now()) + '; ' + str(line) + '\n')
-        #print line
+    try:
+        #If there's something in the serial buffer, get it
+        while(arg[1].inWaiting()>0):
+            line = arg[1].readline().rstrip().split(',')
+            arg[2].write(str(datetime.datetime.now()) + ';' + ','.join(line) + '\n')
+            #print line
 
-        #Only look at the GPGGA sentence
-        if(line[0]=='$GPGGA' and len(line) == 15):
-            coord = []
+            #Only look at the GPGGA sentence
+            if(line[0]=='$GPGGA' and len(line) == 15):
+                coord = []
 
-            #Check if there's a fix
-            if((line[6]=='1' or line[6]=='2') and arg[0].gps_fix==False):
-                coord = [float(line[2]),float(line[4])]
-                print 'We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1])
-                arg[3].write(str(datetime.datetime.now())+'; We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1]) + '\n')
-                arg[0].gps_fix=True
-                arg[0].lost_fix=False
-                arg[0].gps_initial = line
+                #Check if there's a fix
+                if((line[6]=='1' or line[6]=='2') and arg[0].gps_fix==False):
+                    coord = [float(line[2]),float(line[4])]
+                    print 'We\'re locked at:' + str(coord[0]) + ',' + str(coord[1])
+                    arg[3].write(str(datetime.datetime.now())+';We\'re locked at: ' + str(coord[0]) + ',' + str(coord[1]) + '\n')
+                    arg[0].gps_fix=True
+                    arg[0].lost_fix=False
+                    arg[0].gps_initial = line
 
-            if(line[6]=='0' and arg[0].gps_fix==True):
-                print 'lost fix'
-                arg[0].gps_fix=False
-                arg[0].lost_fix=True
-                arg[0].lost_fix_time = time.time()*1000.0
+                if(line[6]=='0' and arg[0].gps_fix==True):
+                    print 'lost fix with:'+','.join(line)
+                    arg[3].write(str(datetime.datetime.now())+';Lost fix')
+                    arg[0].gps_fix=False
+                    arg[0].lost_fix=True
+                    arg[0].lost_fix_time = time.time()*1000.0
 
-            #If there's a fix, check boundary conditions and altitude
-            if(arg[0].gps_fix):
-                coord = [float(line[2]),float(line[4])]
+                #If there's a fix, check boundary conditions and altitude
+                if(arg[0].gps_fix):
+                    coord = [float(line[2]),float(line[4])]
+                    print 'GPS Coordinates: ' + str(coord)
 
-                if( coord[0] > arg[0].NSEW_limits[0] or coord[0] < arg[0].NSEW_limits[1] or coord[1] < arg[0].NSEW_limits[2] or coord[1] > arg[0].NSEW_limits[3] ):
-                    print 'Reached the boundary limits'
-                    arg[3].write(str(datetime.datetime.now())+'; Reached the boundary limits\n')
-                    arg[0].boundary_reached = True
+                    if( coord[0] > arg[0].NSEW_limits[0] or coord[0] < arg[0].NSEW_limits[1] or coord[1] < arg[0].NSEW_limits[2] or coord[1] > arg[0].NSEW_limits[3] ):
+                        print 'Reached the boundary limits'
+                        arg[3].write(str(datetime.datetime.now())+';Reached the boundary limits\n')
+                        arg[0].boundary_reached = True
 
-                if(float(line[9]) > 152.4 and not arg[0].mission_start):
-                    arg[0].mission_start = True
-                    print 'Reached 500ft, Mission Start'
-                    arg[3].write(str(datetime.datetime.now()) + '; Reached 500ft, Mission Start\n')
-                    arg[0].start_time = time.time()*1000.0
-
-                magField(arg, line, arg[4])
+                    magField(arg, line, arg[4])
+    except Exception, e:
+        print "Unexpected error:", sys.exc_info()[0]
+        arg[3].write(str(datetime.datetime.now())+';'+ str(e.message)+'\n')
 
 
 def convertGPS(latitude, longitude):
@@ -209,28 +216,28 @@ def fuser(arg):
             GPIO.output(fuser_pin,GPIO.HIGH)
             print 'Fired fuser, boundary'
             arg[0].mission_finished = True
-            arg[1].write(str(datetime.datetime.now())+'; Fired fuser, over boundary\n')
+            arg[1].write(str(datetime.datetime.now())+';Fired fuser, over boundary\n')
             arg[0].fuser_count = arg[0].fuser_count + 1
 
         elif(arg[0].mission_start and (time.time()*1000.0-arg[0].start_time > mission_time)):
             GPIO.output(fuser_pin,GPIO.HIGH)
             print 'Fired fuser, overtime'
             arg[0].mission_finished = True
-            arg[1].write(str(datetime.datetime.now())+'; Fired fuser, overtime\n')
+            arg[1].write(str(datetime.datetime.now())+';Fired fuser, overtime\n')
             arg[0].fuser_count = arg[0].fuser_count + 1
 
         elif(arg[0].lost_fix and (time.time()*1000.0-arg[0].lost_fix_time > 5*60*1000.0)):
             GPIO.output(fuser_pin,GPIO.HIGH)
             print 'Fired fuser, lost fix for more than 5 mins'
             arg[0].mission_finished = True
-            arg[1].write(str(datetime.datetime.now())+'; Fired fuser, lost fix for more than 5 mins')
+            arg[1].write(str(datetime.datetime.now())+';Fired fuser, lost fix for more than 5 mins')
             arg[0].fuser_count = arg[0].fuser_count + 1
 
-        if(arg[0].fuser_count > 10):
+        if(arg[0].fuser_count > 5):
             arg[0].fuser_fired = True
             GPIO.output(fuser_pin,GPIO.LOW)
             print 'Turned off fuser'
-            arg[1].write(str(datetime.datetime.now())+'; Turned off fuser\n')
+            arg[1].write(str(datetime.datetime.now())+';Turned off fuser\n')
 
 def estimator(arg):
     if(arg[0].mag_field_exists):
@@ -241,8 +248,8 @@ def estimator(arg):
 
         arg[0].estimated_euler, arg[0].cbi = arg[1].getAttitude(arg[0])
 
-        arg[2].write(str(datetime.datetime.now()) + '; accel: ' + str(arg[0].accel) + ';gyro: ' + str(arg[0].gyro) + ';mag: ' + str(arg[0].mag) + '\n')
-        arg[3].write(str(datetime.datetime.now()) + '; ' + str(arg[0].estimated_euler) + 'rot: ' + ','.join([str(x).rstrip() for x in arg[0].cbi]) + '\n')
+        arg[2].write(str(datetime.datetime.now()) + ';accel:' + str(arg[0].accel) + ';gyro:' + str(arg[0].gyro) + ';mag: ' + str(arg[0].mag) + '\n')
+        arg[3].write(str(datetime.datetime.now()) + ';' + str(arg[0].estimated_euler) + ';rot:' + ','.join([str(x).rstrip() for x in arg[0].cbi]) + '\n')
 
 def control_func(arg):
     '''
@@ -257,22 +264,20 @@ def control_func(arg):
     now = time.time()*1000.0
     delay = 2 #minutes
     count = now + arg[0].spin_count * (delay*60*1000.0) - arg[0].start_time
-    print count
     if(arg[0].mission_start and count > delay*60*1000.0):
-        print count
         if(count > delay*60*1000.0  and count < delay*60*1000.0 + 5000):
             arg[1].go(2.0)
-            arg[2].write(str(datetime.datetime.now())+'; went forward\n')
-            print 'forward'
+            arg[2].write(str(datetime.datetime.now())+';went forward\n')
+            #print 'forward'
 
         elif( count > delay*60*1000.0 + 5000 and count < delay*60*1000.0 + 10000 ):
             arg[1].go(-2.0)
-            arg[2].write(str(datetime.datetime.now())+'; went backward\n')
-            print 'back'
+            arg[2].write(str(datetime.datetime.now())+';went backward\n')
+            #print 'back'
         else:
             arg[1].go(0.0)
-            arg[2].write(str(datetime.datetime.now())+'; stop\n')
-            print 'stop'
+            arg[2].write(str(datetime.datetime.now())+';stop\n')
+            #print 'stop'
             arg[0].spin_count = arg[0].spin_count - 1
 
 
