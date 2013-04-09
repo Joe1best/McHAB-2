@@ -21,7 +21,7 @@ import control
 beeper_pin = 23
 fuser_pin = 18
 motor_pin = 4
-mission_time = 120 * 60 * 1000.0 #120 mins. --> millisec
+mission_time = 150 * 60 * 1000.0 #150 mins. --> millisec
 
 class PersistantVars:
     accel = []
