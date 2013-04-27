@@ -107,7 +107,7 @@ def readGPS(arg):
 
                 if(line[6]=='0' and arg[0].gps_fix==True):
                     print 'lost fix with:'+','.join(line)
-                    arg[3].write(str(datetime.datetime.now())+';Lost fix')
+                    arg[3].write(str(datetime.datetime.now())+';Lost fix\n')
                     arg[0].gps_fix=False
                     arg[0].lost_fix=True
                     arg[0].lost_fix_time = time.time()*1000.0
@@ -119,7 +119,7 @@ def readGPS(arg):
 
                     if( coord[0] > arg[0].NSEW_limits[0] or coord[0] < arg[0].NSEW_limits[1] or coord[1] < arg[0].NSEW_limits[2] or coord[1] > arg[0].NSEW_limits[3] ):
                         print 'Reached the boundary limits'
-                        arg[3].write(str(datetime.datetime.now())+';Reached the boundary limits\n')
+                        arg[3].write(str(datetime.datetime.now())+';Reached the boundary limits at: ' + str(coord) +'\n')
                         arg[0].boundary_reached = True
 
                     magField(arg, line, arg[4])
@@ -230,7 +230,7 @@ def fuser(arg):
             GPIO.output(fuser_pin,GPIO.HIGH)
             print 'Fired fuser, lost fix for more than 5 mins'
             arg[0].mission_finished = True
-            arg[1].write(str(datetime.datetime.now())+';Fired fuser, lost fix for more than 5 mins')
+            arg[1].write(str(datetime.datetime.now())+';Fired fuser, lost fix for more than 5 mins\n')
             arg[0].fuser_count = arg[0].fuser_count + 1
 
         if(arg[0].fuser_count > 5):
