@@ -39,6 +39,9 @@ class PersistantVars:
     ang_vel = []
     rpm = 0
     spin_count = 1
+    cont_first = True
+    cont_count = 0
+    saturated = False
 
     alt = 0
     pressure = 0
@@ -252,34 +255,33 @@ def estimator(arg):
         arg[3].write(str(datetime.datetime.now()) + ';' + str(arg[0].estimated_euler) + ';rot:' + ','.join([str(x).rstrip() for x in arg[0].cbi]) + '\n')
 
 def control_func(arg):
-    '''
     kp = 0.05
     kd = 0.05
-    tau = -kp*arg[0].estimated_euler[0]*math.pi/180.0 - kd*arg[0].ang_vel[2]*math.pi/180.0
     I_motor = 1.21*10**-4
-    f_s = 10.0
-    arg[0].rpm = arg[0].rpm + 1.0/f_s*tau/I_motor
-    print arg[0].rpm
-    '''
+    f_s = 5.0
     now = time.time()*1000.0
-    delay = 2 #minutes
-    count = now + arg[0].spin_count * (delay*60*1000.0) - arg[0].start_time
-    if(arg[0].mission_start and count > delay*60*1000.0):
-        if(count > delay*60*1000.0  and count < delay*60*1000.0 + 5000):
-            arg[1].go(2.0)
-            arg[2].write(str(datetime.datetime.now())+';went forward\n')
-            #print 'forward'
+    delay = 20 #minutes
+    duration = 1 #minutes
+    if(arg[0].mission_start):
+        if(now - (arg[0].mission_start+(delay*60*1000*arg[0].cont_count)) > delay*60*1000 and not arg[0].saturated):
+            if(arg[0].cont_first):
+                arg[0].cont_time = now
+                arg[0].cont_first = False
 
-        elif( count > delay*60*1000.0 + 5000 and count < delay*60*1000.0 + 10000 ):
-            arg[1].go(-2.0)
-            arg[2].write(str(datetime.datetime.now())+';went backward\n')
-            #print 'back'
-        else:
-            arg[1].go(0.0)
-            arg[2].write(str(datetime.datetime.now())+';stop\n')
-            #print 'stop'
-            arg[0].spin_count = arg[0].spin_count - 1
+            tau = -kp*arg[0].estimated_euler[0]*math.pi/180.0 - kd*arg[0].ang_vel[2]*math.pi/180.0
+            arg[0].rpm = arg[0].rpm + 1.0/f_s*tau/I_motor
 
+            if(arg[0].rpm > 800):
+                arg[0].rpm = 800
+                arg[0].saturated = True
+                arg[2].write(str(datetime.datetime.now())+';Saturated')
+
+            volt = (arg[0].rpm+79.66)/743.99
+            arg[1].go(volt)
+            arg[2].write(str(datetime.datetime.now())+';rpm_cmd:'+str(arg[0].rpm)+';vol_cmd:'+str(arg[0].volt))
+            if(now - arg[0].cont_time > duration*60*1000):
+                arg[1].go(0)
+                arg[0].cont_count=arg[0].cont_count+1
 
 if __name__ == '__main__':
     #Create log files
