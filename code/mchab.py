@@ -35,12 +35,13 @@ class PersistantVars:
     #NSEW_limits = [45*100+40, 45*100+39, 72*100+32, 73*100+28]
 
     estimated_euler = []
+    estimator_works = False
     cbi = np.array([[0,0,0],[0,0,0],[0,0,0]])
     ang_vel = []
     rpm = 0
     spin_count = 1
     cont_first = True
-    cont_count = 0
+    cont_count = 1
     saturated = False
 
     alt = 0
@@ -59,7 +60,7 @@ class PersistantVars:
     beep_gps = False
     beep_time = 0
 
-    mission_start = False
+    mission_start = True
     start_time = time.time()*1000.0
     mission_finished = False
 
@@ -250,6 +251,7 @@ def estimator(arg):
         arg[0].ang_vel = convert_gyro(arg[0].gyro)
 
         arg[0].estimated_euler, arg[0].cbi = arg[1].getAttitude(arg[0])
+        arg[0].estimator_works = True
 
         arg[2].write(str(datetime.datetime.now()) + ';accel:' + str(arg[0].accel) + ';gyro:' + str(arg[0].gyro) + ';mag: ' + str(arg[0].mag) + '\n')
         arg[3].write(str(datetime.datetime.now()) + ';' + str(arg[0].estimated_euler) + ';rot:' + ','.join([str(x).rstrip() for x in arg[0].cbi]) + '\n')
@@ -261,9 +263,9 @@ def control_func(arg):
     f_s = 5.0
     now = time.time()*1000.0
     delay = 20 #minutes
-    duration = 1 #minutes
+    duration = 0.5 #minutes
     if(arg[0].mission_start):
-        if(now - (arg[0].mission_start+(delay*60*1000*arg[0].cont_count)) > delay*60*1000 and not arg[0].saturated):
+        if(now+(delay*60*1000*arg[0].cont_count) - arg[0].start_time > delay*60*1000 and arg[0].estimator_works):
             if(arg[0].cont_first):
                 arg[0].cont_time = now
                 arg[0].cont_first = False
@@ -275,13 +277,16 @@ def control_func(arg):
                 arg[0].rpm = 800
                 arg[0].saturated = True
                 arg[2].write(str(datetime.datetime.now())+';Saturated')
+                print 'Saturated'
 
             volt = (arg[0].rpm+79.66)/743.99
             arg[1].go(volt)
-            arg[2].write(str(datetime.datetime.now())+';rpm_cmd:'+str(arg[0].rpm)+';vol_cmd:'+str(arg[0].volt))
+            arg[2].write(str(datetime.datetime.now())+';rpm_cmd:'+str(arg[0].rpm)+';vol_cmd:'+str(volt))
             if(now - arg[0].cont_time > duration*60*1000):
                 arg[1].go(0)
+                arg[0].rpm = 0
                 arg[0].cont_count=arg[0].cont_count+1
+                arg[0].cont_first = True
 
 if __name__ == '__main__':
     #Create log files
