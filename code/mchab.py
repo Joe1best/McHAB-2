@@ -60,7 +60,7 @@ class PersistantVars:
     beep_gps = False
     beep_time = 0
 
-    mission_start = True
+    mission_start = False
     start_time = time.time()*1000.0
     mission_finished = False
 
@@ -257,38 +257,39 @@ def estimator(arg):
         arg[3].write(str(datetime.datetime.now()) + ';' + str(arg[0].estimated_euler) + ';rot:' + ','.join([str(x).rstrip() for x in arg[0].cbi]) + '\n')
 
 def control_func(arg):
-    kp = 0.01
-    kd = 0.01
+    kp = 0.02
+    kd = 0.02
     I_motor = 1.21*10**-4
     f_s = 5.0
     now = time.time()*1000.0
-    delay = 1 #minutes
+    delay = 10 #minutes
     duration = 0.5 #minutes
     if(arg[0].mission_start):
-        print 'time:'+str(now - (arg[0].start_time+delay*60*1000*arg[0].cont_count))+';target:'+str(delay*60*1000.0)+';est:'+str(arg[0].estimator_works)
-        if((now - (arg[0].start_time+delay*60*1000.0*arg[0].cont_count) > delay*60*1000.0) and arg[0].estimator_works):
-            if(arg[0].cont_first):
-                arg[0].cont_time = now
-                arg[0].cont_first = False
-                arg[2].write(str(datetime.datetime.now())+'Turned on control\n')
+        if(now - arg[0].start_time < 2*60*60*1000.0):
+            print 'time:'+str(now - (arg[0].start_time+delay*60*1000*arg[0].cont_count))+';target:'+str(delay*60*1000.0)+';est:'+str(arg[0].estimator_works)
+            if((now - (arg[0].start_time+delay*60*1000.0*arg[0].cont_count) > delay*60*1000.0) and arg[0].estimator_works):
+                if(arg[0].cont_first):
+                    arg[0].cont_time = now
+                    arg[0].cont_first = False
+                    arg[2].write(str(datetime.datetime.now())+'Turned on control\n')
 
-            tau = -kp*arg[0].estimated_euler[0]*math.pi/180.0 - kd*arg[0].ang_vel[2]*math.pi/180.0
-            arg[0].rpm = arg[0].rpm + 1.0/f_s*tau/I_motor
+                tau = -kp*arg[0].estimated_euler[0]*math.pi/180.0 - kd*arg[0].ang_vel[2]*math.pi/180.0
+                arg[0].rpm = arg[0].rpm + 1.0/f_s*tau/I_motor
 
-            if(arg[0].rpm > 800):
-                arg[0].rpm = 800
-                arg[0].saturated = True
-                arg[2].write(str(datetime.datetime.now())+';Saturated\n')
+                if(arg[0].rpm > 800):
+                    arg[0].rpm = 800
+                    arg[0].saturated = True
+                    arg[2].write(str(datetime.datetime.now())+';Saturated\n')
 
-            volt = (arg[0].rpm+79.66)/743.99
-            arg[1].go(volt)
-            arg[2].write(str(datetime.datetime.now())+';rpm_cmd:'+str(arg[0].rpm)+';vol_cmd:'+str(volt)+'\n')
-            if(now - arg[0].cont_time > duration*60*1000):
-                arg[1].go(0)
-                arg[0].rpm = 0
-                arg[0].cont_count=arg[0].cont_count+1
-                arg[0].cont_first = True
-                arg[2].write(str(datetime.datetime.now())+'Turned off control\n')
+                volt = (arg[0].rpm+79.66)/743.99
+                arg[1].go(volt)
+                arg[2].write(str(datetime.datetime.now())+';rpm_cmd:'+str(arg[0].rpm)+';vol_cmd:'+str(volt)+'\n')
+                if(now - arg[0].cont_time > duration*60*1000):
+                    arg[1].go(0)
+                    arg[0].rpm = 0
+                    arg[0].cont_count=arg[0].cont_count+1
+                    arg[0].cont_first = True
+                    arg[2].write(str(datetime.datetime.now())+'Turned off control\n')
 
 if __name__ == '__main__':
     #Create log files
