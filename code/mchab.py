@@ -21,6 +21,7 @@ import control
 beeper_pin = 23
 fuser_pin = 18
 motor_pin = 4
+enable_pin = 17
 mission_time = 150 * 60 * 1000.0 #150 mins. --> millisec
 
 class PersistantVars:
@@ -319,10 +320,12 @@ if __name__ == '__main__':
     GPIO.setup(beeper_pin,GPIO.OUT)
     GPIO.setup(fuser_pin,GPIO.OUT)
     GPIO.setup(motor_pin,GPIO.OUT)
+    GPIO.setup(enable_pin,GPIO.OUT)
 
     GPIO.output(beeper_pin,GPIO.LOW)
     GPIO.output(fuser_pin,GPIO.LOW)
     GPIO.output(motor_pin,GPIO.LOW)
+    GPIO.output(enable_pin,GPIO.HIGH)
 
     #Sampling Frequencies
     bmp_fs = 2.0
